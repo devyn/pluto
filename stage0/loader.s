@@ -84,7 +84,7 @@ recv_hex:
 get_hex:
         addi sp, sp, -16
         sd ra, 0(sp)
-        sd s2, 8(sp)
+        sd s2, 8(sp) # byte
 .Lget_hex_first:
         call getc
         li t0, '.'
@@ -100,11 +100,13 @@ get_hex:
         call from_hex_digit
         bltz a0, .Lget_hex_second
         or s2, s2, a0
-        mv a0, s2
+        li a0, '#'
+        call putc # echo for each byte
         j .Lget_hex_done
 .Lget_hex_dot_received:
-        li a0, -1
+        li s2, -1
 .Lget_hex_done:
+        mv a0, s2
         ld ra, 0(sp)
         ld s2, 8(sp)
         addi sp, sp, 16
