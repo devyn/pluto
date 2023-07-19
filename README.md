@@ -3,11 +3,7 @@ Bootstrapping from nothing
 
 First, make the stage1.hex file and copy its contents to your clipboard
 
-    $ make stage1.hex
-    # on linux/xorg
-    $ xclip -selection PRIMARY < stage1.hex
-    # on macOS
-    $ pbcopy < stage1.hex
+    $ make copy-stage1
 
 Then run the emulator and you should be able to paste in the file
 
