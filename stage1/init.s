@@ -4,47 +4,31 @@
 
 .global start
 start:
-        la a0, MSG
         mv s1, ra
+        la a0, INIT_MSG
         call puts
+.Lstart_repl:
+        la a0, PROMPT
+        call puts
+        la a0, LINE_BUF
+        li a1, 4096
+        call get_line
+        beqz a0, .Lstart_end
+        la a0, LINE_BUF
+        call puts
+        la a0, OK_MSG
+        call puts
+        j .Lstart_repl
+.Lstart_end:
         mv ra, s1
-        ret
-
-.global getc
-getc:
-        # call opensbi sbi_console_getchar
-        li a7, 0x02
-        ecall
-        ret
-
-.global putc
-putc:
-        # call opensbi sbi_console_putchar
-        li a7, 0x01
-        ecall
-        ret
-
-# Accepts a zero-terminated string in a0
-.global puts
-puts:
-        addi sp, sp, -24
-        sd ra, 0(sp)
-        sd s1, 8(sp)
-        sd s2, 16(sp)
-        mv s1, a0
-.Lputs_loop:
-        lb s2, (s1)
-        mv a0, s2
-        call putc
-        addi s1, s1, 1
-        bnez s2, .Lputs_loop
-.Lputs_done:
-        ld ra, 0(sp)
-        ld s1, 8(sp)
-        ld s2, 16(sp)
-        addi sp, sp, 24
         ret
 
 .section .rodata
 
-MSG: .asciz "success."
+INIT_MSG: .asciz "\nstage1 initializing.\n"
+PROMPT: .asciz "> "
+OK_MSG: .asciz "ok\n"
+
+.bss
+
+LINE_BUF: .skip 4096
