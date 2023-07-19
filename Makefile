@@ -8,11 +8,10 @@ QEMUFLAGS = -s
 
 all: stage0.elf stage1.hex
 
-clean:
-	rm -f stage0.{elf,bin,hex}
-	rm -f stage0/*.o
-	rm -f stage1.{elf,bin,hex}
-	rm -f stage1/*.o
+clean: clean-stage0 clean-stage1
+
+include stage0/make.mk
+include stage1/make.mk
 
 qemu: stage0.elf
 	$(QEMU) \
@@ -26,22 +25,10 @@ qemu: stage0.elf
 gdb:
 	$(GDB) -ex 'file stage0.elf' -ex 'target remote localhost:1234'
 
-stage0.elf: stage0/link.ld stage0/loader.o
-	$(LD) -T $< -o $@ $(filter %.o,$^)
-
-stage0/%.o: stage0/%.s
-	$(AS) -o $@ $<
-
-stage1.elf: stage1/link.ld stage1/init.o
-	$(LD) -T $< -o $@ $(filter %.o,$^)
-
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
 
 %.hex: %.bin
 	xxd -p $< > $@
-
-stage1/%.o: stage1/%.s
-	$(AS) -o $@ $<
 
 .PHONY: all clean qemu gdb
