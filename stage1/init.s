@@ -2,22 +2,34 @@
 
 .text
 
+.set LINE_BUF_LENGTH, 1024
+
 .global start
 start:
         mv s1, ra
         la a0, INIT_MSG
-        call puts
+        ld a1, (INIT_MSG_LENGTH)
+        call put_buf
+        # allocate line buffer into s2
+        li a0, LINE_BUF_LENGTH
+        li a1, 1
+        call allocate
+        beqz a0, .Lstart_end
+        mv s2, a0
 .Lstart_repl:
         la a0, PROMPT
-        call puts
-        la a0, LINE_BUF
-        li a1, 4096
+        ld a1, (PROMPT_LENGTH)
+        call put_buf
+        mv a0, s2
+        li a1, LINE_BUF_LENGTH
         call get_line
         beqz a0, .Lstart_end
-        la a0, LINE_BUF
-        call puts
+        mv a1, a0
+        mv a0, s2
+        call put_buf
         la a0, OK_MSG
-        call puts
+        ld a1, (OK_MSG_LENGTH)
+        call put_buf
         j .Lstart_repl
 .Lstart_end:
         mv ra, s1
@@ -25,10 +37,11 @@ start:
 
 .section .rodata
 
-INIT_MSG: .asciz "\nstage1 initializing.\n"
-PROMPT: .asciz "> "
-OK_MSG: .asciz "ok\n"
+INIT_MSG: .ascii "\nstage1 initializing.\n"
+INIT_MSG_LENGTH: .quad . - INIT_MSG
 
-.bss
+PROMPT: .ascii "> "
+PROMPT_LENGTH: .quad . - PROMPT
 
-LINE_BUF: .skip 4096
+OK_MSG: .ascii "ok\n"
+OK_MSG_LENGTH: .quad . - OK_MSG

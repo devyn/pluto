@@ -14,29 +14,28 @@ putc:
         ecall
         ret
 
-# Accepts a zero-terminated string in a0
-.global puts
-puts:
+# Accepts pointer to buffer in a0, size in a1
+.global put_buf
+put_buf:
         addi sp, sp, -24
         sd ra, 0(sp)
         sd s1, 8(sp)  # s1: current char pointer
-        sd s2, 16(sp) # s2: current char value
+        sd s2, 16(sp) # s2: max pointer (buffer + size)
         mv s1, a0
-.Lputs_loop:
-        lb s2, (s1)
-        mv a0, s2
+        add s2, a0, a1
+.Lput_buf_loop:
+        lb a0, (s1)
         call putc
         addi s1, s1, 1
-        bnez s2, .Lputs_loop
-.Lputs_done:
+        bltu s1, s2, .Lput_buf_loop
+.Lput_buf_done:
         ld ra, 0(sp)
         ld s1, 8(sp)
         ld s2, 16(sp)
         addi sp, sp, 24
         ret
 
-# Puts line from console in buffer a0, size a1. Returns length of final string, not including the
-# zero at the end
+# Puts line from console in buffer a0, size a1. Returns length of final string
 .global get_line
 get_line:
         addi sp, sp, -40
@@ -88,8 +87,6 @@ get_line:
         sb s4, (s2)
         addi s1, s1, 1
         addi s2, s2, 1
-.Lget_line_add_zero:
-        sb zero, (s2)
 .Lget_line_done:
         mv a0, s1
         ld ra, 0(sp)
