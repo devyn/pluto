@@ -60,7 +60,7 @@ get_token:
         li t1, ';'
         beq t0, t1, .Lget_token_comment
         # string
-        li t1, '"'
+        li t1, 0x22 # double quote (")
         beq t0, t1, .Lget_token_string
         # integer (but not sure which type)
         li t1, '0'
@@ -142,15 +142,25 @@ get_token:
         li a4, 1
         addi a0, a0, 1
         addi a1, a1, -1
-        li t1, '"'
+        li t1, 0x22 # double quote (")
 2:
         beqz a1, 3f # eof
         lb t0, (a0)
-        # always consume the last quote
+        # consume, even if this is the last quote
         addi a0, a0, 1
         addi a4, a4, 1
         addi a1, a1, -1
-        beq t0, t1, 4f
+        # if it's not a double quote, loop
+        bne t0, t1, 2b
+        # it's a double quote, so peek ahead to see if the next one is also
+        beqz a1, 4f # eof so can't peek ahead but we got the double quote so it's ok
+        lb t0, (a0)
+        bne t0, t1, 4f # it's not a quote so we can just end
+        # consume
+        addi a0, a0, 1
+        addi a4, a4, 1
+        addi a1, a1, -1
+        # loop
         j 2b
 3:
         # eof is an error
