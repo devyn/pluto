@@ -2,7 +2,12 @@ clean-stage1:
 	rm -f stage1.{elf,bin,hex}
 	rm -f stage1/*.o
 
-STAGE1_OBJECTS = init.o io.o object.o memory.o
+STAGE1_OBJECTS = \
+	init.o \
+	io.o \
+	object.o \
+	memory.o \
+	parser.o
 
 stage1.elf: stage1/link.ld $(addprefix stage1/,$(STAGE1_OBJECTS))
 	$(LD) -T $< -o $@ $(filter %.o,$^)

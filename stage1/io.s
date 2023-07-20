@@ -35,6 +35,41 @@ put_buf:
         addi sp, sp, 24
         ret
 
+# Puts unsigned number in a0 as hex, a1 = number of digits
+.global put_hex
+put_hex:
+        addi sp, sp, -24
+        sd ra, 0(sp)
+        sd s1, 8(sp) # s1: current number value
+        sd s2, 16(sp) # s2: counter
+        mv s1, a0
+        mv s2, a1
+        # shift over to truncate digits
+        li t0, 16
+        sub t0, t0, s2 # 16 - digits
+        slli t0, t0, 2 # (16 - digits) * 4
+        sll s1, s1, t0
+1:
+        # take the first digit
+        li t1, -1
+        slli t1, t1, 60
+        and a0, s1, t1
+        srli a0, a0, 60
+        addi a0, a0, '0'
+        call putc
+        # shift to the left by one digit
+        slli s1, s1, 4
+        # subtract from counter
+        addi s2, s2, -1
+        beqz s2, 2f
+        j 1b
+2:
+        ld ra, 0(sp)
+        ld s1, 8(sp)
+        ld s2, 16(sp)
+        addi sp, sp, 24
+        ret
+
 # Puts line from console in buffer a0, size a1. Returns length of final string
 .global get_line
 get_line:
@@ -57,6 +92,8 @@ get_line:
         # check for backspace
         li t0, '\b'
         beq s4, t0, .Lget_line_backspace
+        li t0, 0x7f
+        beq s4, t0, .Lget_line_backspace
         # check for newline
         li t0, '\r'
         beq s4, t0, .Lget_line_newline
@@ -76,6 +113,7 @@ get_line:
         addi s1, s1, -1
         addi s2, s2, -1
         # echo backspace character
+        li a0, '\b'
         call putc
         j .Lget_line_loop
 .Lget_line_newline:

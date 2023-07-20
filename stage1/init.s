@@ -26,7 +26,33 @@ start:
         beqz a0, .Lstart_end
         mv a1, a0
         mv a0, s2
+1:
+        # loop through tokens and print them
+        beqz a1, 2f
+        call get_token
+        beqz a0, 2f
+        beqz a2, 2f
+        mv s3, a0
+        mv s4, a1
+        mv s5, a2
+        mv s6, a3
+        mv s7, a4
+        mv a0, s5
+        li a1, 2
+        call put_hex
+        li a0, '['
+        call putc
+        mv a0, s6
+        mv a1, s7
         call put_buf
+        li a0, ']'
+        call putc
+        li a0, '\n'
+        call putc
+        mv a0, s3
+        mv a1, s4
+        j 1b
+2:
         la a0, OK_MSG
         ld a1, (OK_MSG_LENGTH)
         call put_buf
