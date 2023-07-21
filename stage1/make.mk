@@ -5,6 +5,7 @@ clean-stage1:
 STAGE1_OBJECTS = \
 	init.o \
 	io.o \
+	number.o \
 	object.o \
 	memory.o \
 	parser.o

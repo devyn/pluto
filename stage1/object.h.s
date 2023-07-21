@@ -2,6 +2,10 @@
 .set LISP_OBJECT_TYPE,     0
 .set LISP_OBJECT_REFCOUNT, 4
 
+.set LISP_INTEGER_VALUE, 8
+
+.set LISP_SYMBOL_INDEX, 8
+
 .set LISP_CONS_HEAD, 8
 .set LISP_CONS_TAIL, 16
 
@@ -14,6 +18,7 @@
 
 # Size of a lisp_object in bytes
 .set LISP_OBJECT_SIZE, 32
+.set LISP_OBJECT_ALIGN, 8
 
 # lisp object type values
 .set LISP_OBJECT_TYPE_INTEGER,    0
