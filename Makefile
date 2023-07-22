@@ -23,7 +23,7 @@ qemu: stage0.elf
 		$(QEMUFLAGS)
 
 gdb:
-	$(GDB) -ex 'file stage0.elf' -ex 'target remote localhost:1234'
+	$(GDB) -ex 'file stage1.elf' -ex 'target remote localhost:1234'
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@

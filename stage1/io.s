@@ -49,21 +49,28 @@ put_hex:
         sub t0, t0, s2 # 16 - digits
         slli t0, t0, 2 # (16 - digits) * 4
         sll s1, s1, t0
-1:
+.Lput_hex_loop:
         # take the first digit
-        li t1, -1
-        slli t1, t1, 60
+        li t1, (-1 << 60)
         and a0, s1, t1
         srli a0, a0, 60
+        # check if it's > 9 (A-F)
+        li t1, 9
+        bgt a0, t1, .Lput_hex_af
+.Lput_hex_09:
         addi a0, a0, '0'
+        j .Lput_hex_putc
+.Lput_hex_af:
+        addi a0, a0, ('a' - 0xA)
+.Lput_hex_putc:
         call putc
-        # shift to the left by one digit
-        slli s1, s1, 4
         # subtract from counter
         addi s2, s2, -1
-        beqz s2, 2f
-        j 1b
-2:
+        beqz s2, .Lput_hex_end
+        # shift to the left by one digit
+        slli s1, s1, 4
+        j .Lput_hex_loop
+.Lput_hex_end:
         ld ra, 0(sp)
         ld s1, 8(sp)
         ld s2, 16(sp)

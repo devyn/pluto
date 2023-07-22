@@ -354,7 +354,16 @@ parse_token:
         # place the object in s6
         j .Lparse_token_place_object
 .Lparse_token_list_assoc:
-        j .Lparse_token_error # WIP
+        # check current state entry
+        lw s2, PARSER_STATE_INDEX(s1)
+        jal t0, .Lparse_token_get_state_pointer_s2
+        ld t0, PARSER_STATE_E_FLAG(s2)
+        beqz t0, .Lparse_token_error # no list to assoc to
+        li t1, PARSER_FLAG_ASSOC
+        or t1, t0, t1 # t1 = flags | PARSER_FLAG_ASSOC
+        beq t0, t1, .Lparse_token_error # assoc was already set
+        sd t1, PARSER_STATE_E_FLAG(s2) # set assoc
+        j .Lparse_token_ret_ok
 .Lparse_token_string:
         j .Lparse_token_error # WIP
 .Lparse_token_address:

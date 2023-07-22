@@ -6,8 +6,8 @@
 hex_str_to_int:
         # construct number in t1
         mv t1, zero
+        beqz a1, .Lhex_str_to_int_ret # empty string
 .Lhex_str_to_int_loop:
-        beqz a1, .Lhex_str_to_int_ret # end of string
         # read byte in
         lb t2, (a0)
         # check range
@@ -25,6 +25,7 @@ hex_str_to_int:
         bltu t2, t3, 1f
         # it's A-F
         j 2f
+1:
         li t3, 'f'
         bgtu t2, t3, 1f
         li t3, 'a'
@@ -41,11 +42,13 @@ hex_str_to_int:
 .Lhex_str_to_int_next:
         # add the digit in t2 to t1
         or t1, t1, t2
-        # shift left one hex digit
-        slli t1, t1, 4
         # move ptr forward, length backward
         addi a0, a0, 1
         addi a1, a1, -1
+        # end of string (don't shift)
+        beqz a1, .Lhex_str_to_int_ret
+        # shift left one hex digit
+        slli t1, t1, 4
         j .Lhex_str_to_int_loop
 .Lhex_str_to_int_ret:
         mv a0, t1

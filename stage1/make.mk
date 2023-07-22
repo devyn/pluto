@@ -14,7 +14,7 @@ stage1.elf: stage1/link.ld $(addprefix stage1/,$(STAGE1_OBJECTS))
 	$(LD) -T $< -o $@ $(filter %.o,$^)
 
 stage1/%.o: stage1/%.s
-	cd stage1 && $(AS) -o $(patsubst stage1/%,%,$@) $(patsubst stage1/%,%,$<)
+	cd stage1 && $(AS) -g -o $(patsubst stage1/%,%,$@) $(patsubst stage1/%,%,$<)
 
 copy-stage1: stage1.hex
 	xclip -selection CLIPBOARD < $< || \
