@@ -8,6 +8,7 @@ STAGE1_OBJECTS = \
 	number.o \
 	object.o \
 	memory.o \
+	symbol.o \
 	parser.o
 
 stage1.elf: stage1/link.ld $(addprefix stage1/,$(STAGE1_OBJECTS))

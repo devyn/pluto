@@ -256,11 +256,11 @@ parse_token:
         # free up some saved registers for our use
         addi sp, sp, -7*8
         sd ra, 0x00(sp)
-        sd s1, 0x08(sp) # a0
+        sd s1, 0x08(sp) # a0 = parser state array
         sd s2, 0x10(sp) # current state pointer
-        sd s3, 0x18(sp) # a2
-        sd s4, 0x20(sp) # a3
-        sd s5, 0x28(sp) # a4
+        sd s3, 0x18(sp) # a2 = token type
+        sd s4, 0x20(sp) # a3 = token slice ptr
+        sd s5, 0x28(sp) # a4 = token slice length
         sd s6, 0x30(sp) # produced object for placement
         # save all of the arguments so that we can call other procedures
         mv s1, a0
@@ -293,7 +293,13 @@ parse_token:
         # unrecognized = error
         j .Lparse_token_error
 .Lparse_token_symbol:
-        j .Lparse_token_error # WIP
+        # intern the token to a symbol
+        mv a0, s4
+        mv a1, s5
+        call symbol_intern
+        mv s6, a0
+        beqz s6, .Lparse_token_error # allocation failed, or intern symbol internal error
+        j .Lparse_token_place_object
 .Lparse_token_decimal:
         j .Lparse_token_error # WIP
 .Lparse_token_hex:

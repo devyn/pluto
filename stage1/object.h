@@ -10,6 +10,11 @@ struct lisp_cons {
   struct lisp_object *tail; // NULL = nil
 };
 
+struct lisp_symbol {
+  char *buf;
+  unsigned long len; // cap = len for symbols (they must be allocated with exact size)
+};
+
 struct lisp_string {
   char *buf;
   unsigned long len; // the length of the string
@@ -26,7 +31,7 @@ struct lisp_object {
   int refcount; // should be >= 1, or else destroy
   union {
     long as_integer;
-    long as_symbol; // symbol table index
+    struct lisp_symbol as_symbol;
     struct lisp_cons as_cons;
     struct lisp_string as_string;
     struct lisp_procedure as_procedure;

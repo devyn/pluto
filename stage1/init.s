@@ -18,6 +18,8 @@ start:
         la a0, INIT_MSG
         ld a1, (INIT_MSG_LENGTH)
         call put_buf
+        # other initialization
+        call symbol_init
 .Lstart_init_parser:
         # init the parser array
         la s2, PARSER_ARRAY

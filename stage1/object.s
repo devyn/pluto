@@ -70,6 +70,8 @@ print_obj:
         beq t0, t1, .Lprint_obj_cons
         li t1, LISP_OBJECT_TYPE_INTEGER
         beq t0, t1, .Lprint_obj_integer
+        li t1, LISP_OBJECT_TYPE_SYMBOL
+        beq t0, t1, .Lprint_obj_symbol
         # print <??> if unrecognized
         la s1, PRINT_UNRECOGNIZED_MSG
         ld s1, (PRINT_UNRECOGNIZED_MSG_LENGTH)
@@ -115,6 +117,12 @@ print_obj:
         ld a0, LISP_INTEGER_VALUE(s1)
         li a1, 16
         call put_hex
+        j .Lprint_obj_ret
+.Lprint_obj_symbol:
+        # just print the string
+        ld a0, LISP_SYMBOL_BUF(s1)
+        ld a1, LISP_SYMBOL_LEN(s1)
+        call put_buf
         j .Lprint_obj_ret
 .Lprint_obj_ret:
         ld ra, 0(sp)
