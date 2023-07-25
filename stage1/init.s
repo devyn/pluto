@@ -20,6 +20,7 @@ start:
         call put_buf
         # other initialization
         call symbol_init
+        call words_init
 .Lstart_init_parser:
         # init the parser array
         la s2, PARSER_ARRAY
@@ -47,34 +48,14 @@ start:
         # make sure token is valid
         beqz a0, .Lstart_parse_done
         beqz a2, .Lstart_parse_done
-        # preserve the output of get_token in s3-s7
+        # save the remaining buffer
         mv s3, a0
         mv s4, a1
-        mv s5, a2
-        mv s6, a3
-        mv s7, a4
-        mv a0, s5
-        # print two digits token type
-        li a1, 2
-        call put_hex
-        # print the token buffer in brackets
-        li a0, '['
-        call putc
-        mv a0, s6
-        mv a1, s7
-        call put_buf
-        li a0, ']'
-        call putc
-        li a0, '\n'
-        call putc
         # parse the token and print the object if object produced
         la a0, PARSER_ARRAY
-        mv a2, s5
-        mv a3, s6
-        mv a4, s7
         call parse_token
-        bgtz a0, 1f # value produced
-        beqz a0, 2f # ok but nothing produced
+        bgtz a0, .Lstart_eval # value produced
+        beqz a0, .Lstart_token_loop_next # ok but nothing produced
         # some kind of error
         li t0, PARSER_STATUS_OVERFLOW
         beq a0, t0, .Lstart_token_overflow
@@ -82,20 +63,38 @@ start:
         ld a1, (ERR_MSG_LENGTH)
         call put_buf
         j .Lstart_init_parser
-1:
-        # save a1 (object produced) into s5
-        mv s5, a1
+.Lstart_eval:
+        # evaluate object produced
+        mv a0, a1
+        mv a1, zero # no local symbols
+        call eval
+        # save result to (s5, s6)
+        mv s5, a0
+        mv s6, a1
         # print PRODUCE_MSG
         la a0, PRODUCE_MSG
         ld a1, (PRODUCE_MSG_LENGTH)
         call put_buf
-        # print the object
-        mv a0, s5
+        # if a0 = err, print error
+        bnez s5, .Lstart_eval_err
+.Lstart_eval_ok:
+        # print result of eval
+        mv a0, s6
         call print_obj
+        j .Lstart_eval_done
+.Lstart_eval_err:
+        # print the error
+        la a0, ERR_MSG
+        ld a1, (ERR_MSG_LENGTH)
+        call put_buf
+        mv a0, s5
+        li a1, 16
+        call put_hex
+.Lstart_eval_done:
         # print newline
         li a0, '\n'
         call putc
-2:
+.Lstart_token_loop_next:
         # restore the remaining line buffer to a0-a1 and loop
         mv a0, s3
         mv a1, s4

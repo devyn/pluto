@@ -11,6 +11,7 @@
 #
 # these are unique values that are interned once, and it should always be possible to check
 # equality by pointer
+.global SYMBOLS
 SYMBOLS: .skip SYMBOLS_LEN * 8
 
 .text
@@ -18,17 +19,9 @@ SYMBOLS: .skip SYMBOLS_LEN * 8
 # initialize the symbol array with all zeroes
 .global symbol_init
 symbol_init:
-        la t0, SYMBOLS
-        li t1, SYMBOLS_LEN
-        slli t1, t1, 3 # 8 bytes
-        add t1, t0, t1 # t1 = max address
-1:
-        bge t0, t1, 2f
-        sd zero, (t0)
-        addi t0, t0, 8
-        j 1b
-2:
-        ret
+        la a0, SYMBOLS
+        li a1, SYMBOLS_LEN
+        j mem_set_d
 
 # hash a string for the symbol table
 # a0 = buf, a1 = len
@@ -100,10 +93,7 @@ symbol_intern:
 .Lsymbol_intern_search_found:
         # found at head of list: get that object addr and increment refcount
         ld a0, LISP_CONS_HEAD(s4)
-        lw t0, LISP_OBJECT_REFCOUNT(a0)
-        addi t0, t0, 1
-        sw t0, LISP_OBJECT_REFCOUNT(a0)
-        j .Lsymbol_intern_ret
+        j .Lsymbol_intern_found_ret
 .Lsymbol_intern_insert:
         # create a new symbol. first copy the string
         mv a0, s2
@@ -117,33 +107,32 @@ symbol_intern:
         mv a2, s4
         call mem_copy
         # create a new object for the symbol
-        call new_obj
+        mv a3, zero
+        mv a2, s2 # LISP_SYMBOL_LEN
+        mv a1, s4 # LISP_SYMBOL_BUF
+        li a0, LISP_OBJECT_TYPE_SYMBOL
+        call make_obj
         beqz a0, .Lsymbol_intern_error # allocation error
-        li t0, LISP_OBJECT_TYPE_SYMBOL
-        sw t0, LISP_OBJECT_TYPE(a0)
-        li t0, 2
-        sw t0, LISP_OBJECT_REFCOUNT(a0)
-        sd s4, LISP_SYMBOL_BUF(a0)
-        sd s2, LISP_SYMBOL_LEN(a0)
         # move new symbol to s4
         mv s4, a0
         # create a new object for the new cons to insert
-        call new_obj
+        mv a0, s4 # new.head = new symbol
+        ld a1, (s3) # new.tail = current address in symbol table entry
+        call cons
         beqz a0, .Lsymbol_intern_error # allocation error
-        li t0, LISP_OBJECT_TYPE_CONS
-        sw t0, LISP_OBJECT_TYPE(a0)
-        sd s4, LISP_CONS_HEAD(a0)
-        # get the current address in that symbol table entry
-        ld t0, (s3)
-        # set it as tail of the new node
-        sd t0, LISP_CONS_TAIL(a0)
         # put the new cons as the symbol table entry
         sd a0, (s3)
         # return the new symbol
         mv a0, s4
-        j .Lsymbol_intern_ret
+        j .Lsymbol_intern_found_ret
 .Lsymbol_intern_error:
         mv a0, zero
+        j .Lsymbol_intern_ret
+.Lsymbol_intern_found_ret:
+        # increment refcount before returning
+        lw t0, LISP_OBJECT_REFCOUNT(a0)
+        addi t0, t0, 1
+        sw t0, LISP_OBJECT_REFCOUNT(a0)
 .Lsymbol_intern_ret:
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)

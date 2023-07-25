@@ -97,7 +97,7 @@ deallocate_object:
         sd s1, 8(sp) # s1 = saved object address
         sd s2, 16(sp) # s2 = object type
         mv s1, a0
-        lw s2, LISP_OBJECT_TYPE(sp)
+        lwu s2, LISP_OBJECT_TYPE(sp)
 .Ldeallocate_object_cons:
         # check for CONS
         li t0, LISP_OBJECT_TYPE_CONS
@@ -210,3 +210,20 @@ mem_compare:
         sub t1, zero, t1 # t1 = -t1
         add a0, t1, t2 # return -(A < B) + (A > B)
         ret
+
+
+# a0 = start address
+# a1 = length in double-words
+# a2 = value (double-word) to set
+.global mem_set_d
+mem_set_d:
+        # determine max address
+        add t1, a0, a1 # add length to addr
+1:
+        bge a0, t1, 2f
+        sd zero, (a0)
+        addi a0, a0, 8
+        j 1b
+2:
+        ret
+

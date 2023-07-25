@@ -303,10 +303,6 @@ parse_token:
 .Lparse_token_decimal:
         j .Lparse_token_error # WIP
 .Lparse_token_hex:
-        # allocate object for the integer into s6
-        call new_obj
-        mv s6, a0
-        beqz s6, .Lparse_token_error # allocation failed
         # convert the token to an integer
         mv a0, s4
         mv a1, s5
@@ -316,16 +312,16 @@ parse_token:
         addi a0, a0, 2
         addi a1, a1, -2
         call hex_str_to_int
-        # set up the int object
-        li t0, LISP_OBJECT_TYPE_INTEGER
-        sw t0, LISP_OBJECT_TYPE(s6)
-        sd a0, LISP_INTEGER_VALUE(s6)
+        # box the integer
+        call box_integer
+        beqz a0, .Lparse_token_error # allocation failed
+        mv s6, a0
         # place it
         j .Lparse_token_place_object
 .Lparse_token_list_begin:
         # push state
-        lw t0, PARSER_STATE_LENGTH(s1)
-        lw s2, PARSER_STATE_INDEX(s1)
+        lwu t0, PARSER_STATE_LENGTH(s1)
+        lwu s2, PARSER_STATE_INDEX(s1)
         addi s2, s2, 1
         bge s2, t0, .Lparse_token_overflow # check to make sure new index is in bounds
         # store the new index
@@ -341,7 +337,7 @@ parse_token:
         j .Lparse_token_ret_ok
 .Lparse_token_list_end:
         # check current state entry
-        lw s2, PARSER_STATE_INDEX(s1)
+        lwu s2, PARSER_STATE_INDEX(s1)
         jal t0, .Lparse_token_get_state_pointer_s2
         ld t0, PARSER_STATE_E_FLAG(s2)
         beqz t0, .Lparse_token_error # no list to end
@@ -352,7 +348,7 @@ parse_token:
         sd zero, PARSER_STATE_E_BEGIN_NODE(s2)
         sd zero, PARSER_STATE_E_CURRENT_NODE(s2)
         # decrement index if over zero
-        lw t0, PARSER_STATE_INDEX(s1)
+        lwu t0, PARSER_STATE_INDEX(s1)
         beqz t0, 1f
         addi t0, t0, -1
         sw t0, PARSER_STATE_INDEX(s1)
@@ -361,7 +357,7 @@ parse_token:
         j .Lparse_token_place_object
 .Lparse_token_list_assoc:
         # check current state entry
-        lw s2, PARSER_STATE_INDEX(s1)
+        lwu s2, PARSER_STATE_INDEX(s1)
         jal t0, .Lparse_token_get_state_pointer_s2
         ld t0, PARSER_STATE_E_FLAG(s2)
         beqz t0, .Lparse_token_error # no list to assoc to
@@ -376,7 +372,7 @@ parse_token:
         j .Lparse_token_error # WIP
 .Lparse_token_place_object:
         # get the pointer to the current state into s2
-        lw s2, PARSER_STATE_INDEX(s1)
+        lwu s2, PARSER_STATE_INDEX(s1)
         jal t0, .Lparse_token_get_state_pointer_s2
         # if flag = 0, we can just produce the object (we're not inside a list)
         ld t0, PARSER_STATE_E_FLAG(s2)
@@ -387,7 +383,7 @@ parse_token:
         # (empty list)
         ld t3, PARSER_STATE_E_CURRENT_NODE(s2)
         beqz t3, 1f # cons is not set yet
-        lw t4, LISP_OBJECT_TYPE(t3)
+        lwu t4, LISP_OBJECT_TYPE(t3)
         li t5, LISP_OBJECT_TYPE_CONS
         bne t4, t5, .Lparse_token_error # must assoc to a list
         ld t4, LISP_CONS_TAIL(t3)
@@ -398,12 +394,12 @@ parse_token:
         and t1, t0, t1
         bnez t1, .Lparse_token_place_assoc
 .Lparse_token_place_append:
-        call new_obj
+        mv a0, s6 # new.head = s6
+        mv a1, zero
+        call cons
         beqz a0, .Lparse_token_error # alloc error
-        li t1, LISP_OBJECT_TYPE_CONS
-        sw t1, LISP_OBJECT_TYPE(a0) # new.type = LISP_OBJECT_TYPE_CONS
-        sd s6, LISP_CONS_HEAD(a0) # new.head = s6
         mv s6, a0 # s6 = new
+        ld t3, PARSER_STATE_E_CURRENT_NODE(s2)
         beqz t3, 1f # if current = nil, need to set current & begin
         sd s6, LISP_CONS_TAIL(t3) # current.tail = new
         sd s6, PARSER_STATE_E_CURRENT_NODE(s2) # current = new
