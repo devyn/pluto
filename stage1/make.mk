@@ -10,7 +10,9 @@ STAGE1_OBJECTS = \
 	memory.o \
 	symbol.o \
 	parser.o \
-	eval.o
+	eval.o \
+	words.o \
+	proc_builtin.o
 
 stage1.elf: stage1/link.ld $(addprefix stage1/,$(STAGE1_OBJECTS))
 	$(LD) -T $< -o $@ $(filter %.o,$^)
