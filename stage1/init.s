@@ -1,6 +1,7 @@
 .attribute arch, "rv64im"
 
 .include "parser.h.s"
+.include "eval.h.s"
 
 .bss
 
@@ -31,6 +32,9 @@ start:
         sd zero, PARSER_STATE_FIRST + PARSER_STATE_E_BEGIN_NODE(s2)
         sd zero, PARSER_STATE_FIRST + PARSER_STATE_E_CURRENT_NODE(s2)
 .Lstart_repl:
+        lw a0, PARSER_STATE_INDEX(s2)
+        li a1, 2
+        call put_hex
         la a0, PROMPT
         ld a1, (PROMPT_LENGTH)
         call put_buf
@@ -87,11 +91,35 @@ start:
         la a0, ERR_MSG
         ld a1, (ERR_MSG_LENGTH)
         call put_buf
+        # print nicer error messages for builtin error numbers
+        li t1, EVAL_ERROR_EXCEPTION
+        bne s5, t1, 1f
+        la a0, EXCEPTION_MSG
+        ld a1, (EXCEPTION_MSG_LENGTH)
+        j .Lstart_eval_error_msg
+1:
+        li t1, EVAL_ERROR_UNDEFINED
+        bne s5, t1, 1f
+        la a0, UNDEFINED_MSG
+        ld a1, (UNDEFINED_MSG_LENGTH)
+        j .Lstart_eval_error_msg
+1:
+        li t1, EVAL_ERROR_NOT_CALLABLE
+        bne s5, t1, 1f
+        la a0, NOT_CALLABLE_MSG
+        ld a1, (NOT_CALLABLE_MSG_LENGTH)
+        j .Lstart_eval_error_msg
+1:
         mv a0, s5
         li a1, 16
         call put_hex
+        j .Lstart_eval_done
+.Lstart_eval_error_msg:
+        call put_buf
 .Lstart_eval_done:
-        # print newline
+        # print two newlines
+        li a0, '\n'
+        call putc
         li a0, '\n'
         call putc
 .Lstart_token_loop_next:
@@ -100,9 +128,6 @@ start:
         mv a1, s4
         j .Lstart_token_loop
 .Lstart_parse_done:
-        la a0, OK_MSG
-        ld a1, (OK_MSG_LENGTH)
-        call put_buf
         j .Lstart_repl
 .Lstart_token_overflow:
         la a0, OVERFLOW_MSG
@@ -121,14 +146,20 @@ INIT_MSG_LENGTH: .quad . - INIT_MSG
 PROMPT: .ascii "> "
 PROMPT_LENGTH: .quad . - PROMPT
 
-OK_MSG: .ascii "ok\n"
-OK_MSG_LENGTH: .quad . - OK_MSG
-
 ERR_MSG: .ascii "err\n"
 ERR_MSG_LENGTH: .quad . - ERR_MSG
 
 OVERFLOW_MSG: .ascii "overflow\n"
 OVERFLOW_MSG_LENGTH: .quad . - OVERFLOW_MSG
+
+EXCEPTION_MSG: .ascii "exception"
+EXCEPTION_MSG_LENGTH: .quad . - EXCEPTION_MSG
+
+UNDEFINED_MSG: .ascii "undefined"
+UNDEFINED_MSG_LENGTH: .quad . - UNDEFINED_MSG
+
+NOT_CALLABLE_MSG: .ascii "not-callable"
+NOT_CALLABLE_MSG_LENGTH: .quad . - NOT_CALLABLE_MSG
 
 PRODUCE_MSG: .ascii "==> "
 PRODUCE_MSG_LENGTH: .quad . - PRODUCE_MSG
