@@ -4,7 +4,7 @@ LD = $(CROSS_COMPILE)ld
 AS = $(CROSS_COMPILE)as
 OBJCOPY = $(CROSS_COMPILE)objcopy
 QEMU = qemu-system-riscv64
-QEMUFLAGS = -s
+QEMUFLAGS = -s -d guest_errors
 
 all: stage0.elf stage1.hex
 

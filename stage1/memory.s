@@ -126,11 +126,10 @@ deallocate_object:
         # check for PROCEDURE
         li t0, LISP_OBJECT_TYPE_PROCEDURE
         beq s2, t0, .Ldeallocate_object_end
-        # release the pointer x length but only if length > 0
-        ld a1, LISP_PROCEDURE_LEN(s1)
-        beqz a1, .Ldeallocate_object_end
-        ld a0, LISP_PROCEDURE_PTR(s1)
-        call deallocate
+        # release data if not nil
+        ld a0, LISP_PROCEDURE_DATA(s1)
+        beqz a0, .Ldeallocate_object_end
+        call release_object
 .Ldeallocate_object_end:
         mv a0, s1
         li a1, LISP_OBJECT_SIZE

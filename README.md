@@ -53,3 +53,16 @@ Calling hello using the internal ABI:
     Hello, world!
     ==> (0x0000000000000000 0x0000000000000000)
     ok
+
+Read/write `peek` and `poke` are supported, with different lengths:
+
+    > (peek.w (ref (quote foo)))
+    ==> 0x0000000000000001
+    ok
+    > (poke.b 0x820215d8 0x42 0x79 0x65 0x62 0x79 0x65)
+    ==> ()
+    ok
+    > (hello)
+    Byebye world!
+    ==> ()
+    ok

@@ -48,8 +48,8 @@ box_integer:
         li a0, LISP_OBJECT_TYPE_INTEGER
         j make_obj
 
-# make procedure object from a0 (ptr), a1 (len)
-# set len to zero unless procedure is owned
+# make procedure object from a0 (ptr), a1 (data)
+# set data to zero (nil) if not used
 .global box_procedure
 box_procedure:
         mv a3, zero

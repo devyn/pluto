@@ -22,8 +22,17 @@ struct lisp_string {
 };
 
 struct lisp_procedure {
-  void (*ptr)(struct lisp_object* args);
-  unsigned long len; // if > 0, procedure is owned by the object and should be destroyed with it
+  struct lisp_return (*ptr)(
+    struct lisp_object *args,
+    struct lisp_object *local_words,
+    struct lisp_object *data
+  );
+  struct lisp_object *data; // passed on call, can be nil
+};
+
+struct lisp_return {
+  long status;
+  struct lisp_object *return_value;
 };
 
 struct lisp_object {

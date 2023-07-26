@@ -35,25 +35,70 @@ WORDS: .skip WORDS_LEN * 8
 INITIAL_WORDS:
         .quad proc_hello
         .2byte 5
-        .ascii "hello\0"
+        .ascii "hello"
+        .balign 8
 
         .quad proc_quote
         .2byte 5
-        .ascii "quote\0"
+        .ascii "quote"
+        .balign 8
 
         .quad proc_ref
         .2byte 3
-        .ascii "ref\0\0\0"
+        .ascii "ref"
+        .balign 8
 
         .quad proc_deref
         .2byte 5
-        .ascii "deref\0"
+        .ascii "deref"
+        .balign 8
 
         .quad proc_call_native
         .2byte 11
-        .ascii "call-native\0\0\0"
+        .ascii "call-native"
+        .balign 8
 
-.set INITIAL_WORDS_LEN, 5
+        .quad proc_peek_b
+        .2byte 6
+        .ascii "peek.b"
+        .balign 8
+
+        .quad proc_peek_h
+        .2byte 6
+        .ascii "peek.h"
+        .balign 8
+
+        .quad proc_peek_w
+        .2byte 6
+        .ascii "peek.w"
+        .balign 8
+
+        .quad proc_peek_d
+        .2byte 6
+        .ascii "peek.d"
+        .balign 8
+
+        .quad proc_poke_b
+        .2byte 6
+        .ascii "poke.b"
+        .balign 8
+
+        .quad proc_poke_h
+        .2byte 6
+        .ascii "poke.h"
+        .balign 8
+
+        .quad proc_poke_w
+        .2byte 6
+        .ascii "poke.w"
+        .balign 8
+
+        .quad proc_poke_d
+        .2byte 6
+        .ascii "poke.d"
+        .balign 8
+
+.set INITIAL_WORDS_LEN, 13
 
 .text
 
@@ -82,7 +127,7 @@ words_init:
         mv s3, a0 # save the symbol
         # create the procedure
         ld a0, 0x00(s1) # procedure address from INITIAL_WORDS
-        mv a1, zero # len=0 (unowned)
+        mv a1, zero # no data
         call box_procedure
         beqz a0, .Lwords_init_ret # error
         # call define with (symbol, procedure)
@@ -271,10 +316,12 @@ call_procedure:
         lwu t1, LISP_OBJECT_TYPE(a0)
         li t2, LISP_OBJECT_TYPE_PROCEDURE
         bne t1, t2, .Lcall_procedure_not_callable
-        # shift args to a0, a1 and jump to the procedure
+        # shift args to a0-a2 and jump to the procedure
         ld t0, LISP_PROCEDURE_PTR(a0)
-        mv a0, a1
-        mv a1, a2
+        ld t1, LISP_PROCEDURE_DATA(a0)
+        mv a0, a1 # args
+        mv a1, a2 # local words
+        mv a2, t1 # data
         jalr zero, (t0)
 .Lcall_procedure_not_callable:
         li a0, EVAL_ERROR_NOT_CALLABLE
@@ -496,4 +543,162 @@ proc_call_native:
         addi sp, sp, 0x68
         ret
 
+# Peek
 
+.local proc_peek_start
+proc_peek_start:
+        addi sp, sp, -0x18
+        sd ra, 0x00(sp)
+        sd a1, 0x08(sp)
+        sd t0, 0x10(sp) # subvariant return address
+        call car
+        # a0 = first argument (address)
+        ld a1, 0x08(sp) # local words list
+        call eval
+        bnez a0, .Lproc_peek_ret # on error
+        # get value of integer
+        beqz a1, .Lproc_peek_error
+        li t1, LISP_OBJECT_TYPE_INTEGER
+        lwu t2, LISP_OBJECT_TYPE(a1)
+        bne t1, t2, .Lproc_peek_error
+        ld a0, LISP_INTEGER_VALUE(a1)
+        ld t0, 0x10(sp)
+        jalr zero, (t0) # subvariant
+.Lproc_peek_error:
+        li a0, EVAL_ERROR_EXCEPTION
+        j .Lproc_peek_ret
+
+.local proc_peek_end
+proc_peek_end:
+        # box integer in a0 and return
+        call box_integer
+        beqz a0, .Lproc_peek_error
+        mv a1, a0
+        mv a0, zero
+.Lproc_peek_ret:
+        ld ra, 0x00(sp)
+        addi sp, sp, 0x18
+        ret
+
+.global proc_peek_b
+proc_peek_b:
+        jal t0, proc_peek_start
+        lb a0, (a0)
+        j proc_peek_end
+
+.global proc_peek_h
+proc_peek_h:
+        jal t0, proc_peek_start
+        lh a0, (a0)
+        j proc_peek_end
+
+.global proc_peek_w
+proc_peek_w:
+        jal t0, proc_peek_start
+        lw a0, (a0)
+        j proc_peek_end
+
+.global proc_peek_d
+proc_peek_d:
+        jal t0, proc_peek_start
+        ld a0, (a0)
+        j proc_peek_end
+
+# Poke
+
+# variant write in a3, addr s2, value s3, return to t0
+.local proc_poke
+proc_poke:
+        addi sp, sp, -0x30
+        sd ra, 0x00(sp)
+        sd a1, 0x08(sp)
+        sd s1, 0x10(sp) # current argument list pointer
+        sd s2, 0x18(sp) # address
+        sd s3, 0x20(sp) # value
+        sd s4, 0x28(sp) # subvariant code
+        mv s1, a0
+        mv s4, a3
+        # Get address
+        call car
+        ld a1, 0x08(sp)
+        call eval
+        bnez a0, .Lproc_poke_end
+        # Check if a1 is integer
+        beqz a1, .Lproc_poke_error
+        li t2, LISP_OBJECT_TYPE_INTEGER
+        lwu t3, LISP_OBJECT_TYPE(a1)
+        bne t2, t3, .Lproc_poke_error
+        # Get integer value as s2 (address)
+        ld s2, LISP_INTEGER_VALUE(a1)
+1:
+        # Get next argument list
+        mv a0, s1
+        call cdr
+        mv s1, a0
+        # End if list is empty
+        mv a1, zero
+        beqz a0, .Lproc_poke_end
+        # Get next argument
+        call car
+        # Evaluate argument
+        ld a1, 0x08(sp)
+        call eval
+        bnez a0, .Lproc_poke_end
+        # Check if a1 is integer
+        beqz a1, .Lproc_poke_error
+        li t2, LISP_OBJECT_TYPE_INTEGER
+        lwu t3, LISP_OBJECT_TYPE(a1)
+        bne t2, t3, .Lproc_poke_error
+        # Get integer value as s3 (value)
+        ld s3, LISP_INTEGER_VALUE(a1)
+        # Call subvariant code to store the value and increment address
+        jalr t0, (s4)
+        # Loop
+        j 1b
+.Lproc_poke_error:
+        li a0, EVAL_ERROR_EXCEPTION
+.Lproc_poke_end:
+        ld ra, 0x00(sp)
+        ld s1, 0x10(sp)
+        ld s2, 0x18(sp)
+        ld s3, 0x20(sp)
+        ld s4, 0x28(sp)
+        addi sp, sp, 0x30
+        ret
+
+.global proc_poke_b
+proc_poke_b:
+        la a3, 1f
+        j proc_poke
+1:
+        sb s3, (s2)
+        addi s2, s2, 1
+        jalr zero, (t0)
+
+
+.global proc_poke_h
+proc_poke_h:
+        la a3, 1f
+        j proc_poke
+1:
+        sh s3, (s2)
+        addi s2, s2, 2
+        jalr zero, (t0)
+
+.global proc_poke_w
+proc_poke_w:
+        la a3, 1f
+        j proc_poke
+1:
+        sw s3, (s2)
+        addi s2, s2, 4
+        jalr zero, (t0)
+
+.global proc_poke_d
+proc_poke_d:
+        la a3, 1f
+        j proc_poke
+1:
+        sd s3, (s2)
+        addi s2, s2, 8
+        jalr zero, (t0)

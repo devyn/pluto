@@ -15,7 +15,7 @@
 .set LISP_STRING_CAP, 24
 
 .set LISP_PROCEDURE_PTR, 8
-.set LISP_PROCEDURE_LEN, 16
+.set LISP_PROCEDURE_DATA, 16
 
 # Size of a lisp_object in bytes
 .set LISP_OBJECT_SIZE, 32
