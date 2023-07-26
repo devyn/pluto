@@ -73,14 +73,17 @@ builtin_deallocate:
 # increment refcount
 .global acquire_object
 acquire_object:
+        beqz a0, 1f
         lw t0, LISP_OBJECT_REFCOUNT(a0)
         addi t0, t0, 1
         sw t0, LISP_OBJECT_REFCOUNT(a0)
+1:
         ret
 
 # decrement refcount and deallocate if <= 0
 .global release_object
 release_object:
+        beqz a0, 1f
         lw t0, LISP_OBJECT_REFCOUNT(a0)
         addi t0, t0, -1
         sw t0, LISP_OBJECT_REFCOUNT(a0)

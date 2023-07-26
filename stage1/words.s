@@ -23,8 +23,9 @@ WORDS: .skip WORDS_LEN * 8
 
 # The initial words list is a packed efficient format consisting of variable-length records of:
 #
-# 1. procedure address, 8 bytes
+# 1. first field (address or int), 8 bytes
 # 2. symbol length, 2 bytes unsigned (load with `lhu`)
+# 3. type, byte
 # 3. symbol text, variable length
 #
 # the beginning of each should be aligned to 8 bytes
@@ -33,70 +34,179 @@ WORDS: .skip WORDS_LEN * 8
 INITIAL_WORDS:
         .quad proc_hello
         .2byte 5
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "hello"
         .balign 8
 
         .quad proc_quote
         .2byte 5
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "quote"
         .balign 8
 
         .quad proc_ref
         .2byte 3
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "ref"
         .balign 8
 
         .quad proc_deref
         .2byte 5
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "deref"
         .balign 8
 
         .quad proc_call_native
         .2byte 11
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "call-native"
         .balign 8
 
         .quad proc_peek_b
         .2byte 6
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "peek.b"
         .balign 8
 
         .quad proc_peek_h
         .2byte 6
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "peek.h"
         .balign 8
 
         .quad proc_peek_w
         .2byte 6
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "peek.w"
         .balign 8
 
         .quad proc_peek_d
         .2byte 6
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "peek.d"
         .balign 8
 
         .quad proc_poke_b
         .2byte 6
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "poke.b"
         .balign 8
 
         .quad proc_poke_h
         .2byte 6
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "poke.h"
         .balign 8
 
         .quad proc_poke_w
         .2byte 6
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "poke.w"
         .balign 8
 
         .quad proc_poke_d
         .2byte 6
+        .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "poke.d"
         .balign 8
 
-.set INITIAL_WORDS_LEN, 13
+        .quad proc_car
+        .2byte 3
+        .byte LISP_OBJECT_TYPE_PROCEDURE
+        .ascii "car"
+        .balign 8
+
+        .quad proc_cdr
+        .2byte 3
+        .byte LISP_OBJECT_TYPE_PROCEDURE
+        .ascii "cdr"
+        .balign 8
+
+        .quad proc_proc
+        .2byte 4
+        .byte LISP_OBJECT_TYPE_PROCEDURE
+        .ascii "proc"
+        .balign 8
+
+        .quad proc_eval
+        .2byte 4
+        .byte LISP_OBJECT_TYPE_PROCEDURE
+        .ascii "eval"
+        .balign 8
+
+        .quad ALLOCATE
+        .2byte 10
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "allocate$$"
+        .balign 8
+
+        .quad DEALLOCATE
+        .2byte 12
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "deallocate$$"
+        .balign 8
+
+        .quad define
+        .2byte 7
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "define$"
+        .balign 8
+
+        .quad symbol_intern
+        .2byte 14
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "symbol-intern$"
+        .balign 8
+
+        .quad eval
+        .2byte 5
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "eval$"
+        .balign 8
+
+        .quad lookup
+        .2byte 7
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "lookup$"
+        .balign 8
+
+        .quad putc
+        .2byte 5
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "putc$"
+        .balign 8
+
+        .quad put_buf
+        .2byte 8
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "put-buf$"
+        .balign 8
+
+        .quad put_hex
+        .2byte 8
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "put-hex$"
+        .balign 8
+
+        .quad getc
+        .2byte 5
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "getc$"
+        .balign 8
+
+        .quad get_line
+        .2byte 9
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "get-line$"
+        .balign 8
+
+        .quad print_obj
+        .2byte 10
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "print-obj$"
+        .balign 8
+
+.set INITIAL_WORDS_LEN, 29
 
 .text
 
@@ -119,16 +229,18 @@ words_init:
         beqz s2, .Lwords_init_ret
         # load the symbol into (a0, a1) and intern
         lhu a1, 0x08(s1) # len
-        addi a0, s1, 0x0a # buf
+        addi a0, s1, 0x0b # buf
         call symbol_intern
         beqz a0, .Lwords_init_ret # error
         mv s3, a0 # save the symbol
-        # create the procedure
-        ld a0, 0x00(s1) # procedure address from INITIAL_WORDS
-        mv a1, zero # no data
-        call box_procedure
+        # create the object
+        lbu a0, 0x0a(s1) # type from INITIAL_WORDS
+        ld a1, 0x00(s1) # field0 from INITIAL_WORDS
+        mv a2, zero
+        mv a3, zero
+        call make_obj
         beqz a0, .Lwords_init_ret # error
-        # call define with (symbol, procedure)
+        # call define with (symbol, object)
         mv a1, a0
         mv a0, s3
         call define
@@ -137,7 +249,7 @@ words_init:
         addi s2, s2, -1
         # increment pointer to INITIAL_WORDS entry
         lhu t1, 0x08(s1) # get length of string into t1
-        addi s1, s1, 10 # length of (procedure, len) = 10 bytes
+        addi s1, s1, 11 # length of (object, len, type) = 11 bytes
         add s1, s1, t1 # add length of string
         # align pointer to 8 bytes
         andi t1, s1, (1 << 3) - 1 # mask remainder

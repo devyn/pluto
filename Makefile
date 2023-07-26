@@ -31,4 +31,10 @@ gdb:
 %.hex: %.bin
 	xxd -p $< > $@
 
-.PHONY: all clean qemu gdb
+copy-all: stage1.hex stage2.lsp
+	(cat stage1.hex; echo -n '.'; cat stage2.lsp) | ( \
+		xclip -selection CLIPBOARD || \
+		wl-copy || \
+		pbcopy)
+
+.PHONY: all clean qemu gdb copy-all

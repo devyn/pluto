@@ -31,17 +31,21 @@ eval:
         beq t1, t2, .Leval_symbol # eval symbol just looks it up
         li t2, LISP_OBJECT_TYPE_CONS
         bne t1, t2, .Leval_literal # anything other than a cons or sym is just returned literally
-        # if it's a cons, we look up the value in head
+        # if it's a cons, we evaluate head first, it should be a procedure
         ld a0, LISP_CONS_HEAD(s1)
         mv a1, s2
-        call lookup_var
-        beqz a0, .Leval_error_undefined # matching symbol not found
+        call eval
+        bnez a0, .Leval_ret # error
         # call the (assumed) procedure with the tail of the cons as argument list
         mv a0, a1
         ld a1, LISP_CONS_TAIL(s1)
         mv a2, s2
-        call call_procedure
-        j .Leval_ret
+        # tail call: call_procedure
+        ld ra, 0x00(sp)
+        ld s1, 0x08(sp)
+        ld s2, 0x10(sp)
+        addi sp, sp, 0x18
+        j call_procedure
 .Leval_symbol:
         # if it's a symbol we just look it up
         mv a0, s1
