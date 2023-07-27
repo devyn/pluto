@@ -168,7 +168,7 @@ _stack: .skip 256
 .align 16
 
 .global _program_area
-_program_area: .skip 0x40000
+_program_area: .skip 0x200000
 
 .global _program_area_end
 .equ _program_area_end, .

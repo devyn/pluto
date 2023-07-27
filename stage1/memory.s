@@ -21,7 +21,7 @@ BUILTIN_HEAP_PTR: .quad _heap_start
 
 .align 8
 .global _heap_start
-_heap_start: .skip 0x20000
+_heap_start: .skip 0x100000
 .equ _heap_end, .
 
 .text
