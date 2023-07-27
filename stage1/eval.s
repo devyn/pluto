@@ -18,10 +18,11 @@
 # a1 = return value
 .global eval
 eval:
-        addi sp, sp, -0x18
+        addi sp, sp, -0x20
         sd ra, 0x00(sp)
         sd s1, 0x08(sp) # s1 = expression to evaluate
         sd s2, 0x10(sp) # s2 = local words list
+        sd s3, 0x18(sp) # cons tail (procedure arglist)
         mv s1, a0
         mv s2, a1
         # check type of expression
@@ -31,40 +32,74 @@ eval:
         beq t1, t2, .Leval_symbol # eval symbol just looks it up
         li t2, LISP_OBJECT_TYPE_CONS
         bne t1, t2, .Leval_literal # anything other than a cons or sym is just returned literally
+        # destructure the cons to (s1 . s4)
+        call uncons
+        mv s1, a1
+        mv s4, a2
         # if it's a cons, we evaluate head first, it should be a procedure
-        ld a0, LISP_CONS_HEAD(s1)
+        mv a0, s1
         mv a1, s2
+        call acquire_locals
         call eval
+        mv s1, zero # used the head, so set to nil
         bnez a0, .Leval_ret # error
         # call the (assumed) procedure with the tail of the cons as argument list
         mv a0, a1
-        ld a1, LISP_CONS_TAIL(s1)
+        mv a1, s3
         mv a2, s2
         # tail call: call_procedure
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
         ld s2, 0x10(sp)
-        addi sp, sp, 0x18
+        addi sp, sp, 0x28
         j call_procedure
 .Leval_symbol:
         # if it's a symbol we just look it up
         mv a0, s1
         mv a1, s2
         call lookup_var
+        mv s1, zero # used
+        mv s2, zero # used
         beqz a0, .Leval_error_undefined
         mv a0, zero
         j .Leval_ret
 .Leval_error_undefined:
         li a0, EVAL_ERROR_UNDEFINED
+        mv a1, zero
         j .Leval_ret
 .Leval_literal:
         mv a0, zero
         mv a1, s1
+        mv s1, zero # used
 .Leval_ret:
+        # release s1 and s2 if they're still set, since they aren't part of the return value
+        addi sp, sp, -0x10
+        sd a0, 0x00(sp)
+        sd a1, 0x08(sp)
+        mv a0, s1
+        call release_object
+        mv a1, s2
+        call release_object
+        ld a0, 0x00(sp)
+        ld a1, 0x08(sp)
+        ld ra, 0x10(sp)
+        ld s1, 0x18(sp)
+        ld s2, 0x20(sp)
+        addi sp, sp, 0x30
+        ret
+
+# Call before eval to increment refcount on locals (a1)
+# Preserves a0, a1 (eval args)
+.global acquire_locals
+acquire_locals:
+        addi sp, sp, 0x10
+        sd ra, 0x00(sp)
+        sd a0, 0x08(sp)
+        mv a0, a1
+        call acquire_object
+        mv a1, a0
         ld ra, 0x00(sp)
-        ld s1, 0x08(sp)
-        ld s2, 0x10(sp)
-        addi sp, sp, 0x18
+        ld a0, 0x08(sp)
         ret
 
 # arguments:
@@ -81,13 +116,42 @@ call_procedure:
         lwu t1, LISP_OBJECT_TYPE(a0)
         li t2, LISP_OBJECT_TYPE_PROCEDURE
         bne t1, t2, .Lcall_procedure_not_callable
-        # shift args to a0-a2 and jump to the procedure
+        # add ref to data and release procedure object
+        addi sp, sp, -0x30
         ld t0, LISP_PROCEDURE_PTR(a0)
         ld t1, LISP_PROCEDURE_DATA(a0)
-        mv a0, a1 # args
-        mv a1, a2 # local words
-        mv a2, t1 # data
+        sd a0, 0x00(sp)
+        sd a1, 0x08(sp)
+        sd a2, 0x10(sp)
+        sd t0, 0x18(sp)
+        sd t1, 0x20(sp)
+        sd ra, 0x28(sp)
+        mv a0, t1
+        call acquire_object
+        ld a0, 0x00(sp)
+        call release_object
+        # load args and jump to the procedure
+        ld t0, 0x18(sp) # procedure addr
+        ld a0, 0x08(sp) # args
+        ld a1, 0x10(sp) # local words
+        ld a2, 0x20(sp) # data
+        ld ra, 0x28(sp) # return addr
+        addi sp, sp, 0x30
         jalr zero, (t0)
 .Lcall_procedure_not_callable:
+        addi sp, sp, -0x18
+        sd ra, 0x00(sp)
+        sd a1, 0x08(sp)
+        sd a2, 0x10(sp)
+        # release arguments
+        call release_object
+        ld a0, 0x08(sp)
+        call release_object
+        ld a0, 0x10(sp)
+        call release_object
+        # clean up stack and return error
+        ld ra, 0x00(sp)
+        addi sp, sp, 0x18
         li a0, EVAL_ERROR_NOT_CALLABLE
+        mv a1, zero
         ret

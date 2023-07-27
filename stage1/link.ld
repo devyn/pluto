@@ -8,4 +8,10 @@ SECTIONS {
 	.rodata : { *(.rodata) }
 	.data : { *(.data) }
 	.bss : { *(.bss) }
+
+	. = ALIGN(8);
+	heap : { *(heap) }
+
+	. = ALIGN(8192);
+	object_region : { *(object_region) }
 }

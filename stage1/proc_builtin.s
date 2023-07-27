@@ -11,6 +11,23 @@ HELLO_MSG_LENGTH: .quad . - HELLO_MSG
 
 .text
 
+# Release object during end of proc
+# Preserves a0, a1
+# Address to release in a2
+.global release_proc_end
+release_proc_end:
+        addi sp, sp, -0x18
+        sd ra, 0x00(sp)
+        sd a0, 0x08(sp)
+        sd a1, 0x10(sp)
+        mv a0, a2
+        call release_object
+        ld ra, 0x00(sp)
+        ld a0, 0x08(sp)
+        ld a1, 0x10(sp)
+        addi sp, sp, 0x18
+        ret
+
 .global proc_hello
 proc_hello:
         addi sp, sp, -8
@@ -64,12 +81,13 @@ proc_ref:
 # Read address to Lisp object and return (does not add refcount)
 .global proc_deref
 proc_deref:
-        addi sp, sp, -0x10
+        addi sp, sp, -0x18
         sd ra, 0x00(sp)
-        sd a1, 0x08(sp)
+        sd a0, 0x08(sp)
+        sd a1, 0x10(sp)
         call car
         # a0 = first argument
-        ld a1, 0x08(sp) # local words list
+        ld a1, 0x10(sp) # local words list
         call eval
         bnez a0, .Lproc_deref_ret # on error
         mv a0, a1
@@ -85,8 +103,11 @@ proc_deref:
 .Lproc_deref_error:
         li a0, EVAL_ERROR_EXCEPTION
 .Lproc_deref_ret:
+        # release arg
+        ld a2, 0x08(sp)
+        call release_proc_end
         ld ra, 0(sp)
-        addi sp, sp, 0x10
+        addi sp, sp, 0x18
         ret
 
 # Lisp procedure for calling native routines.
@@ -480,28 +501,31 @@ proc_stub:
 proc_eval:
         addi sp, sp, -0x20
         sd ra, 0x00(sp)
-        sd a0, 0x08(sp)
         sd a1, 0x10(sp)
-        # get first arg and evaluate
-        call car
+        # evaluate first arg = locals, to 0x18(sp)
+        call uncons
+        beqz a0, .Lproc_eval_exc # end of arg list
+        sd a2, 0x08(sp) # save rest of arg list
+        mv a0, a1 # eval head
         ld a1, 0x10(sp)
+        call acquire_locals # we need to use a1 locals one more time
         call eval
-        # first arg = locals
         bnez a0, .Lproc_eval_error
         sd a1, 0x18(sp)
-        # get second arg and evaluate once in caller scope
+        # evaluate second arg = expression, to 0x20(sp)
         ld a0, 0x08(sp)
-        call cdr
-        call car
+        call car # drop rest
         ld a1, 0x10(sp)
         call eval
         bnez a0, .Lproc_eval_error
-        # evaluate the result again in provided scope
+        # tail-evaluate the result again in provided scope
         mv a0, a1
         ld a1, 0x18(sp)
         ld ra, 0x00(sp)
         addi sp, sp, 0x20
         j eval
+.Lproc_eval_exc:
+        li a0, EVAL_ERROR_EXCEPTION
 .Lproc_eval_error:
         ld ra, 0x00(sp)
         addi sp, sp, 0x20

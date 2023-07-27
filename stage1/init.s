@@ -20,6 +20,7 @@ start:
         ld a1, (INIT_MSG_LENGTH)
         call put_buf
         # other initialization
+        call memory_init
         call symbol_init
         call words_init
 .Lstart_init_parser:
@@ -82,9 +83,10 @@ start:
         # if a0 = err, print error
         bnez s5, .Lstart_eval_err
 .Lstart_eval_ok:
-        # print result of eval
+        # print and discard result of eval
         mv a0, s6
         call print_obj
+        call release_object
         j .Lstart_eval_done
 .Lstart_eval_err:
         # print the error

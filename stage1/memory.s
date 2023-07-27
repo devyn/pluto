@@ -2,9 +2,12 @@
 
 .include "object.h.s"
 
-# The stage1 memory management is very basic and just dedicates some space for heap with no way to
-# deallocate. It does provide a way to swap out these functions though, by jumping indirectly
-# through ALLOCATE and DEALLOCATE.
+# The stage1 memory management provides allocation only for most sizes, and won't deallocate.
+#
+# A special exception is made for objects of LISP_OBJECT_SIZE with alignment of 8. These are stored
+# in memory in bins, starting with a 32 byte allocation bitmap and then 255 allocation
+# slots immediately following.
+.set OBJECT_REGION_SIZE, 8192
 
 .data
 
@@ -17,12 +20,20 @@ DEALLOCATE: .quad builtin_deallocate
 .global BUILTIN_HEAP_PTR
 BUILTIN_HEAP_PTR: .quad _heap_start
 
-.section .bss
+.global OBJECT_REGION_PTR
+OBJECT_REGION_PTR: .quad _object_region_start
 
-.align 8
+.section heap
+
 .global _heap_start
-_heap_start: .skip 0x1c0000
+_heap_start: .skip 0x40000 # 256 KiB
 .equ _heap_end, .
+
+.section object_region
+
+.global _object_region_start
+_object_region_start: .skip 0x40000 # 256 KiB
+.equ _object_region_end, .
 
 .text
 
@@ -40,8 +51,36 @@ deallocate:
         ld t0, (DEALLOCATE)
         jalr zero, (t0)
 
+.global memory_init
+memory_init:
+        addi sp, sp, -0x10
+        sd ra, 0x00(sp)
+        sd s1, 0x08(sp)
+        la s1, _object_region_start
+.Lmemory_init_loop:
+        la t1, _object_region_end
+        bgeu s1, t1, .Lmemory_init_end
+        # Zero the bitmap
+        mv a0, s1
+        li a1, 4
+        mv a2, zero
+        call mem_set_d
+        li t1, OBJECT_REGION_SIZE
+        add s1, s1, t1
+        j .Lmemory_init_loop
+.Lmemory_init_end:
+        ld ra, 0x00(sp)
+        ld s1, 0x08(sp)
+        ret
+
 .global builtin_allocate
 builtin_allocate:
+        # Check for object size/align
+        li t0, LISP_OBJECT_SIZE
+        bne a0, t0, 1f
+        li t0, 8
+        beq a1, t0, builtin_allocate_object # Allocate from object region
+1:
         ld t0, (BUILTIN_HEAP_PTR)
         # align the pointer
         remu t1, t0, a1 # t1 = pointer % alignment
@@ -64,9 +103,117 @@ builtin_allocate:
         mv a0, zero
         ret
 
+.global builtin_allocate_object
+builtin_allocate_object:
+        # Save OBJECT_REGION_PTR so we know if we've checked everything
+        ld t0, (OBJECT_REGION_PTR) # bitmap ptr
+        sd t0, -0x08(sp)
+.Lbuiltin_allocate_object_region_loop:
+        # Find free space in bitmap
+        addi t1, t0, 32 # bitmap max address
+        mv t2, zero # bit index
+.Lbuiltin_allocate_object_bitmap_loop:
+        bgeu t0, t1, .Lbuiltin_allocate_object_not_free
+        li t3, 64 # bits
+        ld t4, (t0) # dw bitmap
+.Lbuiltin_allocate_object_bits_loop:
+        beqz t3, .Lbuiltin_allocate_object_bits_end
+        # check bit
+        andi t5, t4, 1
+        # if zero, it's free
+        beqz t5, .Lbuiltin_allocate_object_free
+        # otherwise shift and increment/decrement counters
+        srli t4, t4, 1
+        addi t3, t3, -1
+        addi t2, t2, 1
+        j .Lbuiltin_allocate_object_bits_loop
+.Lbuiltin_allocate_object_bits_end:
+        # next 8-byte bitmap
+        addi t0, t0, 8
+        j .Lbuiltin_allocate_object_bitmap_loop
+.Lbuiltin_allocate_object_free:
+        # bit index that was free = t2
+        # check if bit index = 256, since the last bit is unused
+        li t3, 256
+        beq t2, t3, .Lbuiltin_allocate_object_not_free
+        # set the bit before proceeding
+        ld t4, (t0) # load
+        andi t5, t2, 63 # t5 = bit offset within current map
+        li t3, 1
+        sll t3, t3, t5 # shift by offset to make that bit
+        or t4, t4, t3 # set the bit
+        sd t4, (t0) # store
+        # store the pointer to the object region that had free space in OBJECT_REGION_PTR
+        # for next time
+        andi t0, t0, -32 # realign to beginning
+        la t1, OBJECT_REGION_PTR
+        sd t0, (t1)
+        # calculate address that was free
+        addi t2, t2, 1 # skip bitmap
+        slli t2, t2, 5 # multiply x 32
+        add a0, t0, t2 # add offset
+        ret
+.Lbuiltin_allocate_object_not_free:
+        # try next region
+        andi t0, t0, -32 # be sure to realign to beginning of the region
+        li t1, OBJECT_REGION_SIZE
+        add t0, t0, t1
+        # wrap to beginning if we reach end
+        la t1, _object_region_end
+        bltu t0, t1, 1f
+        la t0, _object_region_start
+1:
+        # check to see if we are back where we started - if so return an error
+        ld t1, -0x08(sp)
+        beq t0, t1, .Lbuiltin_allocate_object_error
+        # loop again
+        j .Lbuiltin_allocate_object_region_loop
+.Lbuiltin_allocate_object_error:
+        mv a0, zero
+        ret
+
 .global builtin_deallocate
 builtin_deallocate:
+        # Check if ptr in object region
+        la t0, _object_region_start
+        bltu a0, t0, 1f
+        la t0, _object_region_end
+        bltu a0, t0, builtin_deallocate_object # Deallocate from object region
+1:
         # do nothing
+        mv a0, zero
+        ret
+
+.global builtin_deallocate_object
+builtin_deallocate_object:
+        # ensure ptr in range
+        la t0, _object_region_start
+        bltu a0, t0, .Lbuiltin_deallocate_object_ret
+        la t0, _object_region_end
+        bgeu a0, t0, .Lbuiltin_deallocate_object_ret
+        # find bitmap base address
+        li t0, -OBJECT_REGION_SIZE
+        and t0, a0, t0
+        # find bitmap bit offset
+        li t1, OBJECT_REGION_SIZE - 1
+        and t1, a0, t1
+        srli t1, t1, 5 # 32 bytes
+        beqz t1, .Lbuiltin_deallocate_object_ret # can't deallocate bitmap
+        addi t1, t1, -1 # subtract one (bitmap slot)
+        # which doubleword (64 bits) is that? 1 << 6 = 64
+        slli t2, t1, 6 # doubleword offset
+        andi t1, t1, (1 << 6) - 1 # bit inside doubleword
+        # calculate mask for clearing that bit
+        li t3, 1
+        sll t3, t3, t1
+        xor t3, t3, zero # invert
+        # load, mask, store
+        add t0, t0, t2 # add doubleword offset
+        ld t4, (t0)
+        and t4, t4, t3
+        sd t4, (t0)
+        # bit has been cleared, now free
+.Lbuiltin_deallocate_object_ret:
         mv a0, zero
         ret
 
@@ -88,8 +235,9 @@ release_object:
         addi t0, t0, -1
         sw t0, LISP_OBJECT_REFCOUNT(a0)
         bgtz t0, 1f
-        call deallocate_object
-        1:
+        j deallocate_object
+1:
+        mv a0, zero
         ret
 
 # calls deallocate for an object as well as any of the memory it owns
@@ -141,6 +289,8 @@ deallocate_object:
         ld s1, 8(sp)
         ld s2, 16(sp)
         addi sp, sp, 24
+        mv a0, zero
+        ret
 
 # a0 = length
 # a1 = src pointer

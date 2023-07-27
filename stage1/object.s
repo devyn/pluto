@@ -2,34 +2,6 @@
 
 .include "object.h.s"
 
-# Lisp object in a0. Returns value of head in a0. Returns nil if not cons
-.global car
-car:
-        jal t0, check_cons
-        ld a0, LISP_CONS_HEAD(a0)
-        ret
-
-# Lisp object in a0. Returns value of tail in a0. Returns nil if not cons
-.global cdr
-cdr:
-        jal t0, check_cons
-        ld a0, LISP_CONS_TAIL(a0)
-        ret
-
-# microprocedure, uses t0 return address, modifies t1, t2
-.local check_cons
-check_cons:
-        beqz a0, return_nil
-        li t1, LISP_OBJECT_TYPE_CONS
-        lwu t2, LISP_OBJECT_TYPE(a0)
-        bne t1, t2, return_nil
-        jalr zero, (t0)
-
-.local return_nil
-return_nil:
-        mv a0, zero
-        ret
-
 # make cons from a0 (head), a1 (tail)
 .global cons
 cons:
@@ -38,6 +10,43 @@ cons:
         mv a1, a0
         li a0, LISP_OBJECT_TYPE_CONS
         j make_obj
+
+# destructure cons in a0
+# return a0 = 1 on success, a1 = head, a2 = tail
+# maintains refcount on head and tail, but releases the cons
+.global uncons
+uncons:
+        addi sp, sp, -0x20
+        sd ra, 0x00(sp)
+        sd zero, 0x08(sp)
+        sd zero, 0x10(sp)
+        sd zero, 0x18(sp)
+        beqz a0, .Luncons_ret # nil
+        li t1, LISP_OBJECT_TYPE_CONS
+        lwu t2, LISP_OBJECT_TYPE(a0)
+        bne t2, t1, .Luncons_ret # not cons
+        # success - get value
+        li t1, 1
+        ld t2, LISP_CONS_HEAD(a0)
+        ld t3, LISP_CONS_TAIL(a1)
+        sd t1, 0x08(sp)
+        sd t2, 0x10(sp)
+        sd t3, 0x18(sp)
+        # acquire HEAD
+        mv a0, t2
+        call acquire_object
+        # acquire TAIL
+        ld a0, 0x18(sp)
+        call acquire_object
+.Luncons_ret:
+        # always release
+        call release_object
+        ld ra, 0x00(sp)
+        ld a0, 0x08(sp)
+        ld a1, 0x10(sp)
+        ld a2, 0x18(sp)
+        addi sp, sp, 0x20
+        ret
 
 # make integer object from int in a0
 .global box_integer
@@ -48,6 +57,72 @@ box_integer:
         li a0, LISP_OBJECT_TYPE_INTEGER
         j make_obj
 
+# Return only head from cons in a0
+# Takes ownership of reference, so make sure to acquire first if you don't want to lose the cons
+# Returns nil if not cons
+.global car
+car:
+        add sp, sp, 0x10
+        sd ra, 0x00(sp)
+        sd zero, 0x08(sp) # head
+        call uncons
+        beqz a0, .Lcar_ret # not cons
+        # save head
+        sd a1, 0x08(sp)
+        # release tail
+        mv a0, a2
+        call release_object
+.Lcar_ret:
+        ld ra, 0x00(sp)
+        ld a0, 0x08(sp)
+        ret
+
+# Return only tail from cons in a0
+# Takes ownership of reference, so make sure to acquire first if you don't want to lose the cons
+# Returns nil if not cons
+.global cdr
+cdr:
+        add sp, sp, 0x10
+        sd ra, 0x00(sp)
+        sd zero, 0x08(sp) # tail
+        call uncons
+        beqz a0, .Lcdr_ret # not cons
+        # save tail
+        sd a2, 0x08(sp)
+        # release head
+        mv a0, a1
+        call release_object
+.Lcdr_ret:
+        ld ra, 0x00(sp)
+        ld a0, 0x08(sp)
+        ret
+
+# load integer from boxed int (a0) and release it
+# return 1 on success in a0, int value in a1
+.global unbox_integer
+unbox_integer:
+        addi sp, sp, -0x18
+        sd ra, 0x00(sp)
+        sd zero, 0x08(sp)
+        sd zero, 0x10(sp)
+        beqz a0, .Lunbox_integer_ret # nil
+        li t1, LISP_OBJECT_TYPE_INTEGER
+        lwu t2, LISP_OBJECT_TYPE(a0)
+        bne t2, t1, .Lunbox_integer_ret # not integer
+        # success - get value
+        li t1, 1
+        ld t2, LISP_INTEGER_VALUE(a0)
+        sd t1, 0x08(sp)
+        sd t2, 0x10(sp)
+.Lunbox_integer_ret:
+        # always release
+        call release_object
+        ld ra, 0x00(sp)
+        ld a0, 0x08(sp)
+        ld a1, 0x10(sp)
+        addi sp, sp, -0x18
+        ret
+
 # make procedure object from a0 (ptr), a1 (data)
 # set data to zero (nil) if not used
 .global box_procedure
@@ -57,6 +132,41 @@ box_procedure:
         mv a1, a0
         li a0, LISP_OBJECT_TYPE_PROCEDURE
         j make_obj
+
+# unbox and release procedure object (a0), incrementing data refcount first
+# a0 = 1 if success
+# a1 = ptr
+# a2 = data
+.global unbox_procedure
+unbox_procedure:
+        addi sp, sp, -0x20
+        sd ra, 0x00(sp)
+        sd zero, 0x08(sp)
+        sd zero, 0x10(sp)
+        sd zero, 0x18(sp)
+        beqz a0, .Lunbox_procedure_ret # nil
+        li t1, LISP_OBJECT_TYPE_PROCEDURE
+        lwu t2, LISP_OBJECT_TYPE(a0)
+        bne t2, t1, .Lunbox_procedure_ret # not procedure
+        # success - get value
+        li t1, 1
+        ld t2, LISP_PROCEDURE_PTR(a0)
+        ld t3, LISP_PROCEDURE_DATA(a1)
+        sd t1, 0x08(sp)
+        sd t2, 0x10(sp)
+        sd t3, 0x18(sp)
+        # acquire DATA
+        mv a0, t3
+        call acquire_object
+.Lunbox_procedure_ret:
+        # always release
+        call release_object
+        ld ra, 0x00(sp)
+        ld a0, 0x08(sp)
+        ld a1, 0x10(sp)
+        ld a2, 0x18(sp)
+        addi sp, sp, 0x20
+        ret
 
 # sets up a new object and initializes refcount ONLY.
 # returns a0=zero on allocation error, otherwise a0=object.
@@ -111,12 +221,14 @@ make_obj:
         ret
 
 # object to print in a0
+# preserves a0, does not touch refcount
 .global print_obj
 print_obj:
         # reserve stack and save arg in s1
-        addi sp, sp, -16
-        sd ra, 0(sp)
-        sd s1, 8(sp)
+        addi sp, sp, -0x18
+        sd ra, 0x00(sp)
+        sd s1, 0x08(sp)
+        sd a0, 0x10(sp) # so we can preserve it
         mv s1, a0
         beqz s1, .Lprint_obj_cons # since nil = (), handle with cons
         # check object type
@@ -202,9 +314,10 @@ print_obj:
         call putc
         jr t0
 .Lprint_obj_ret:
-        ld ra, 0(sp)
-        ld s1, 8(sp)
-        addi sp, sp, 16
+        ld ra, 0x00(sp)
+        ld s1, 0x08(sp)
+        ld a0, 0x10(sp)
+        addi sp, sp, 0x18
         ret
 
 .section .rodata

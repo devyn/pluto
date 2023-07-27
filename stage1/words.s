@@ -221,6 +221,7 @@ words_init:
         # zero the words table
         la a0, WORDS
         li a1, WORDS_LEN
+        mv a2, zero
         call mem_set_d
         # unpack the initial words table
         la s1, INITIAL_WORDS
@@ -268,6 +269,8 @@ words_init:
 
 # Find the associated value of a symbol key
 #
+# Follows refcount rules (args released, return value owned)
+#
 # arguments:
 # a0 = list ptr
 # a1 = symbol address
@@ -277,21 +280,61 @@ words_init:
 # a1 = found value
 .global lookup
 lookup:
-        beqz a0, .Llookup_ret # a0 = zero, return not found
-        # t1 = current->head
-        ld t1, LISP_CONS_HEAD(a0)
-        # t2 = current->head->head
-        ld t2, LISP_CONS_HEAD(t1)
-        # if head = symbol, found
-        beq a1, t2, .Llookup_found
-        # not found, so loop again with a0 = current->tail
-        ld a0, LISP_CONS_TAIL(a0)
-        j lookup
+        addi sp, sp, -0x20
+        sd ra, 0x00(sp)
+        sd s1, 0x08(sp) # list ptr
+        sd s2, 0x10(sp) # symbol address
+        sd s3, 0x18(sp) # scratch
+        mv s1, a0
+        mv s2, a1
+.Llookup_loop:
+        # destructure the list to (a1 . a2), a1 = pair, a2 = rest of list
+        call uncons
+        beqz a0, .Llookup_not_found # nil or not a list
+        mv s1, a2 # list = list->tail
+        # destructure the pair in a1
+        mv a0, a1
+        call uncons
+        beqz a0, .Llookup_loop # not a pair, skip
+        # check if head = symbol
+        beq a1, s2, .Llookup_found
+        # else, release a1 and a2 and go to next
+        mv s3, a2
+        mv a0, a1
+        call release_object
+        mv a0, s3
+        call release_object
+        j .Llookup_loop
 .Llookup_found:
-        # found, node in t1, return (1, tail)
+        # head (a1) = symbol (s2), return a2
+        mv s3, a2
+        # release head
+        mv a0, a1
+        call release_object
+        # return tail (assoc value)
         li a0, 1
-        ld a1, LISP_CONS_TAIL(t1)
+        mv a1, s3
+        j .Llookup_ret
+.Llookup_not_found:
+        mv a0, zero
+        mv a1, zero
 .Llookup_ret:
+        # preserve return value while we clean up
+        addi sp, sp, -0x10
+        sd a0, 0x00(sp)
+        sd a1, 0x08(sp)
+        # release s1 (remainder of list) and s2 (symbol)
+        mv a0, s1
+        call release_object
+        mv a0, s2
+        call release_object
+        # restore saved values and return
+        ld a0, 0x00(sp)
+        ld a1, 0x08(sp)
+        ld ra, 0x10(sp)
+        ld s1, 0x18(sp)
+        ld s2, 0x20(sp)
+        addi sp, sp, 0x30
         ret
 
 # Find the associated value of a symbol key in either the local words list, or global WORDS
@@ -310,17 +353,29 @@ lookup_var:
         sd s1, 0x08(sp)
         mv s1, a0
         # first check local words list
+        call acquire_object # get another reference to the symbol
         mv a0, a1
         mv a1, s1
         call lookup
-        bnez a0, .Llookup_var_ret
+        bnez a0, .Llookup_var_ret_local
         # if not found, check global WORDS
         mv a0, s1
         call get_words_ptr
         ld a0, (a0) # deref value of WORDS ptr to get head of list
+        call acquire_object # get our own reference
         mv a1, s1
-        call lookup
-.Llookup_var_ret:
+        ld ra, 0x00(sp)
+        ld s1, 0x08(sp)
+        addi sp, sp, 0x10
+        j lookup
+.Llookup_var_ret_local:
+        # we found it locally, clean up extra symbol ref
+        mv t0, a1
+        mv a0, s1
+        mv s1, t0 # s1 now = found return a1
+        call release_object
+        li a0, 1
+        mv a1, s1
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
         addi sp, sp, 0x10
@@ -367,29 +422,21 @@ get_words_ptr:
 define:
         addi sp, sp, -0x18
         sd ra, 0x00(sp)
-        sd s1, 0x08(sp)
-        sd s2, 0x10(sp)
+        sd s1, 0x08(sp) # symbol / words ptr
+        sd s2, 0x10(sp) # pair
         mv s1, a0
-        mv s2, a1
         # create a new pair for (symbol . value)
-        call new_obj
+        call cons
         beqz a0, .Ldefine_error # error
-        li t1, LISP_OBJECT_TYPE_CONS
-        sw t1, LISP_OBJECT_TYPE(a0)
-        sd s1, LISP_CONS_HEAD(a0) # head = symbol
-        sd s2, LISP_CONS_TAIL(a0) # tail = value
-        mv s2, a0 # save the new pair to s2
         # find the ptr into WORDS and then prepend to that list
         mv a0, s1 # the symbol
         call get_words_ptr
         mv s1, a0 # save it to s1
         # create a new cons for the prepend
-        call new_obj
-        li t1, LISP_OBJECT_TYPE_CONS
-        sw t1, LISP_OBJECT_TYPE(a0)
-        sd s2, LISP_CONS_HEAD(a0) # new.head = pair
-        ld t2, (s1) # WORDS[N]
-        sd t2, LISP_CONS_TAIL(a0) # new.tail = WORDS[N]
+        mv a0, s2
+        ld a1, (s1) # WORDS[N]
+        call cons
+        beqz a0, .Ldefine_error
         sd a0, (s1) # WORDS[N] = new
         mv a0, zero # return ok
         j .Ldefine_ret
