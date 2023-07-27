@@ -169,29 +169,130 @@
   (let1 value (ref (eval scope (car args)))
     (cleanup value (car (call-native nil?$ value))))))
 
+; evaluate all elements of a list
+(define eval-list
+  (let-recursive map
+    (proc args scope
+      (if (nil? args) ()
+        (cons (eval scope (car args)) (eval scope (cons map (cdr args))))))
+    ; pass evaluated list to `map`, running it in the provided scope
+    (proc args scope
+      (eval (eval scope (car args)) (cons map (eval scope (cadr args)))))))
+
+; associate two lists into pairs
+(define assoc
+  (let-recursive map
+    (proc args ()
+      (if (nil? (car args))
+        ()
+        (if (nil? (cadr args))
+          ()
+          (cons
+            (cons
+              (car (car args))
+              (car (cadr args)))
+            (unquote (cons map
+              (cons (cdr (car args))
+                (cons (cdr (cadr args))))))))))
+    ; pass evaluated first and second arg to `map`
+    (proc args scope
+      (unquote (cons map
+        (cons (eval scope (car args))
+          (cons (eval scope (cadr args)))))))))
+
+; concat two lists
+(define concat
+  (let-recursive rec
+    (proc args scope
+      (if (nil? (car args))
+        (cadr args)
+        (cons (car (car args))
+          (unquote (cons rec
+            (cons (cdr (car args)) (cons (cadr args))))))))
+    (proc args scope
+      (unquote (cons rec
+        (cons (eval scope (car args))
+          (cons (eval scope (cadr args)))))))))
+
+; (fn (arg0 arg1) expression)
+; allows you to much more nicely define a function - just provide arg list
+; and destructuring will happen automatically
+(define fn (proc def-args def-scope
+  (proc args scope
+    (eval
+      (concat (assoc (car def-args) (eval-list scope args)) def-scope)
+      (cadr def-args)))))
+
 ; Create procedure from native math routine
 ; (proc.native-math <address>)
 ; These can take any number of arguments and fold them. e.g. (+ a b c) = a + b + c
-(define proc.native-math
-  (proc def-args def-scope
-    (let1 address (eval def-scope (car def-args))
-      (let-recursive self
-        (proc args scope
-          (if (nil? (cdr args))
-            (eval scope (car args)) ; no more args
-            (let1 value
-              (car ;a0
-                (call-native address
-                  (eval scope (car args))
-                  (eval scope (cadr args))))
-              ; tail recursive call with remainder of args
-              (unquote (cons self (cons value (cdr (cdr args))))))))
-        self))))
+(define fn.native-math
+  (fn (address)
+    (let-recursive self
+      (proc args scope
+        (if (nil? (cdr args))
+          (eval scope (car args)) ; no more args
+          (let1 value
+            (car ;a0
+              (call-native address
+                (eval scope (car args))
+                (eval scope (cadr args))))
+            ; tail recursive call with remainder of args
+            (unquote (cons self (cons value (cdr (cdr args))))))))
+      self)))
 
 ; define nicer versions of the core math ops we put into memory earlier
-(define + (proc.native-math +$))
-(define << (proc.native-math <<$))
-(define >> (proc.native-math >>$))
-(define & (proc.native-math &$))
-(define | (proc.native-math |$))
-(define ^ (proc.native-math ^$))
+(define + (fn.native-math +$))
+(define << (fn.native-math <<$))
+(define >> (fn.native-math >>$))
+(define & (fn.native-math &$))
+(define | (fn.native-math |$))
+(define ^ (fn.native-math ^$))
+
+; Calculate bit mask = (1 << n) - 1
+(define bit-mask
+  (fn (bits) (+ (<< 0x1 bits) 0xffffffffffffffff)))
+
+; RISC-V instruction formats
+(define rv.opcode-mask (bit-mask 0x7))
+(define rv.reg-mask (bit-mask 0x5))
+(define rv.funct3-mask (bit-mask 0x3))
+(define rv.funct7-mask (bit-mask 0x7))
+(define rv.instr.r
+  (fn (opcode funct3 funct7)
+    (fn (rd rs1 rs2)
+      (| (& opcode rv.opcode-mask)
+        (<< (& rd rv.reg-mask) 0x7)
+        (<< (& funct3 rv.funct3-mask) 0xc)
+        (<< (& rs1 rv.reg-mask) 0xf)
+        (<< (& rs2 rv.reg-mask) 0x14)
+        (<< (& funct7 rv.funct7-mask) 0x19)))))
+(define rv.instr.i
+  (fn (opcode funct3)
+    (fn (rd rs1 imm)
+      (| (& opcode rv.opcode-mask)
+        (<< (& rd rv.reg-mask) 0x7)
+        (<< (& funct3 rv.funct3-mask) 0xc)
+        (<< (& rs1 rv.reg-mask) 0xf)
+        (<< (& imm (bit-mask 0xc)) 0x14)))))
+(define rv.instr.s
+  (fn (opcode funct3)
+    (fn (opcode rs2 imm rs1)
+      (| (& opcode rv.opcode-mask)
+        (<< (& imm (bit-mask 0x5)) 0x7)
+        (<< (& funct3 rv.funct3-mask) 0xc)
+        (<< (& rs1 rv.reg-mask) 0xf)
+        (<< (& rs2 rv.reg-mask) 0x14)
+        (<< (& (>> imm 0x5) (bit-mask 0x7)) 0x19)))))
+(define rv.instr.b
+  (fn (opcode funct3)
+    (fn (opcode rs1 rs2 imm)
+      (| (& opcode rv.opcode-mask)
+        (<< (& (>> imm 0xb) 0x1) 0x7)
+        (<< (& (>> imm 0x1) (bit-mask 0x4)) 0x8)
+        (<< (& funct3 rv.funct3-mask) 0xc)
+        (<< (& rs1 rv.reg-mask) 0xf)
+        (<< (& rs2 rv.reg-mask) 0x14)
+        (<< (& (>> imm 0x5) (bit-mask 0x5)) 0x19)
+        (<< (& (>> imm 0xc) 0x1) 0x1f)))))
+
