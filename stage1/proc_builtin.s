@@ -103,6 +103,13 @@ proc_call_native:
         mv s2, a0
         # address 0x20, a0-a7 from 0x28 .. 0x68
         addi s1, sp, 0x20
+        # just in case, zero that memory to avoid unwanted side effects
+        mv t1, s1
+        addi t2, sp, 0x68
+2:
+        sd zero, (t1)
+        addi t1, t1, 8
+        bltu t1, t2, 2b
 1:
         beqz s2, .Lproc_call_native_invoke # no more arguments
         # ensure arg list is cons
