@@ -167,10 +167,7 @@ print_obj:
         j .Lprint_obj_ret
 .Lprint_obj_integer:
         # todo: print variable width, probably usually decimal
-        li a0, '0'
-        call putc
-        li a0, 'x'
-        call putc
+        jal t0, .Lprint_obj_zero_x
         ld a0, LISP_INTEGER_VALUE(s1)
         li a1, 16
         call put_hex
@@ -182,19 +179,28 @@ print_obj:
         call put_buf
         j .Lprint_obj_ret
 .Lprint_obj_procedure:
-        # print address in angle brackets
+        # print <address data>
         li a0, '<'
         call putc
-        li a0, '0'
-        call putc
-        li a0, 'x'
-        call putc
+        jal t0, .Lprint_obj_zero_x
         ld a0, LISP_PROCEDURE_PTR(s1)
+        li a1, 16
+        call put_hex
+        li a0, ' '
+        call putc
+        jal t0, .Lprint_obj_zero_x
+        ld a0, LISP_PROCEDURE_DATA(s1)
         li a1, 16
         call put_hex
         li a0, '>'
         call putc
         j .Lprint_obj_ret
+.Lprint_obj_zero_x:
+        li a0, '0'
+        call putc
+        li a0, 'x'
+        call putc
+        jr t0
 .Lprint_obj_ret:
         ld ra, 0(sp)
         ld s1, 8(sp)
