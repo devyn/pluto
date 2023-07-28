@@ -24,7 +24,7 @@
 (define cons (proc args scope
   (deref
     (poke.d (allocate 0x20 0x8)
-      0x0000000100000002 ; type = 2, refcount = 1
+      0x0000000100000003 ; type = 3, refcount = 1
       (ref (eval scope (car args)))
       (ref (eval scope (cadr args)))
       0x0))))

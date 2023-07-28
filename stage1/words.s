@@ -290,6 +290,7 @@ lookup:
         mv s2, a1
 .Llookup_loop:
         # destructure the list to (a1 . a2), a1 = pair, a2 = rest of list
+        mv a0, s1
         call uncons
         beqz a0, .Llookup_not_found # nil or not a list
         mv s1, a2 # list = list->tail

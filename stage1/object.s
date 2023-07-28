@@ -37,7 +37,7 @@ uncons:
         mv a0, t2
         call acquire_object
         # acquire TAIL
-        ld a0, 0x18(sp)
+        ld a0, 0x20(sp)
         call acquire_object
 .Luncons_ret:
         # always release
@@ -124,7 +124,7 @@ unbox_integer:
         ld ra, 0x00(sp)
         ld a0, 0x08(sp)
         ld a1, 0x10(sp)
-        addi sp, sp, -0x18
+        addi sp, sp, 0x18
         ret
 
 # make procedure object from a0 (ptr), a1 (data)

@@ -1,8 +1,8 @@
-#define LISP_OBJECT_TYPE_INTEGER    0
-#define LISP_OBJECT_TYPE_SYMBOL     1
-#define LISP_OBJECT_TYPE_CONS       2
-#define LISP_OBJECT_TYPE_STRING     3
-#define LISP_OBJECT_TYPE_PROCEDURE  4
+#define LISP_OBJECT_TYPE_INTEGER    1
+#define LISP_OBJECT_TYPE_SYMBOL     2
+#define LISP_OBJECT_TYPE_CONS       3
+#define LISP_OBJECT_TYPE_STRING     4
+#define LISP_OBJECT_TYPE_PROCEDURE  5
 
 // This is just pseudocode to describe the structure of the lisp objects in memory
 struct lisp_cons {
