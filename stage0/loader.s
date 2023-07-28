@@ -158,7 +158,7 @@ INIT_MSG:
 .align 16
 
 .global _stack
-_stack: .skip 256
+_stack: .skip 0x2000
 
 .global _stack_end
 .equ _stack_end, .

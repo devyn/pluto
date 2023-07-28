@@ -71,6 +71,7 @@ memory_init:
 .Lmemory_init_end:
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
+        addi sp, sp, 0x10
         ret
 
 .global builtin_allocate
@@ -213,6 +214,8 @@ builtin_deallocate_object:
         and t4, t4, t3
         sd t4, (t0)
         # bit has been cleared, now free
+        # zero out the object header to make it more obvious if used after free
+        sd zero, 0x00(a0)
 .Lbuiltin_deallocate_object_ret:
         mv a0, zero
         ret
@@ -252,7 +255,7 @@ deallocate_object:
 .Ldeallocate_object_cons:
         # check for CONS
         li t0, LISP_OBJECT_TYPE_CONS
-        beq s2, t0, .Ldeallocate_object_string
+        bne s2, t0, .Ldeallocate_object_string
         # release head if not nil
         ld a0, LISP_CONS_HEAD(s1)
         beqz a0, 1f
@@ -267,7 +270,7 @@ deallocate_object:
 .Ldeallocate_object_string:
         # check for STRING
         li t0, LISP_OBJECT_TYPE_STRING
-        beq s2, t0, .Ldeallocate_object_procedure
+        bne s2, t0, .Ldeallocate_object_procedure
         # release the buffer x capacity
         ld a0, LISP_STRING_BUF(s1)
         ld a1, LISP_STRING_CAP(s1)
@@ -276,7 +279,7 @@ deallocate_object:
 .Ldeallocate_object_procedure:
         # check for PROCEDURE
         li t0, LISP_OBJECT_TYPE_PROCEDURE
-        beq s2, t0, .Ldeallocate_object_end
+        bne s2, t0, .Ldeallocate_object_end
         # release data if not nil
         ld a0, LISP_PROCEDURE_DATA(s1)
         beqz a0, .Ldeallocate_object_end

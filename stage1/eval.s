@@ -32,10 +32,10 @@ eval:
         beq t1, t2, .Leval_symbol # eval symbol just looks it up
         li t2, LISP_OBJECT_TYPE_CONS
         bne t1, t2, .Leval_literal # anything other than a cons or sym is just returned literally
-        # destructure the cons to (s1 . s4)
+        # destructure the cons to (s1 . s3)
         call uncons
         mv s1, a1
-        mv s4, a2
+        mv s3, a2
         # if it's a cons, we evaluate head first, it should be a procedure
         mv a0, s1
         mv a1, s2
@@ -51,7 +51,8 @@ eval:
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
         ld s2, 0x10(sp)
-        addi sp, sp, 0x28
+        ld s3, 0x18(sp)
+        addi sp, sp, 0x20
         j call_procedure
 .Leval_symbol:
         # if it's a symbol we just look it up
@@ -85,6 +86,7 @@ eval:
         ld ra, 0x10(sp)
         ld s1, 0x18(sp)
         ld s2, 0x20(sp)
+        ld s3, 0x28(sp)
         addi sp, sp, 0x30
         ret
 
@@ -92,7 +94,7 @@ eval:
 # Preserves a0, a1 (eval args)
 .global acquire_locals
 acquire_locals:
-        addi sp, sp, 0x10
+        addi sp, sp, -0x10
         sd ra, 0x00(sp)
         sd a0, 0x08(sp)
         mv a0, a1
@@ -100,6 +102,7 @@ acquire_locals:
         mv a1, a0
         ld ra, 0x00(sp)
         ld a0, 0x08(sp)
+        addi sp, sp, 0x10
         ret
 
 # arguments:

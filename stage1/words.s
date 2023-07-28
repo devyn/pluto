@@ -265,6 +265,7 @@ words_init:
         ld s2, 0x10(sp)
         ld s3, 0x18(sp)
         addi sp, sp, 0x20
+        ret
 
 
 # Find the associated value of a symbol key
@@ -425,18 +426,21 @@ define:
         sd s1, 0x08(sp) # symbol / words ptr
         sd s2, 0x10(sp) # pair
         mv s1, a0
+        mv s2, zero
         # create a new pair for (symbol . value)
         call cons
         beqz a0, .Ldefine_error # error
+        mv s2, a0
         # find the ptr into WORDS and then prepend to that list
         mv a0, s1 # the symbol
         call get_words_ptr
         mv s1, a0 # save it to s1
         # create a new cons for the prepend
-        mv a0, s2
+        mv a0, s2 # pair
         ld a1, (s1) # WORDS[N]
         call cons
         beqz a0, .Ldefine_error
+        mv s2, zero # used
         sd a0, (s1) # WORDS[N] = new
         mv a0, zero # return ok
         j .Ldefine_ret

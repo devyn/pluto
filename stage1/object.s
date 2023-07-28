@@ -16,11 +16,12 @@ cons:
 # maintains refcount on head and tail, but releases the cons
 .global uncons
 uncons:
-        addi sp, sp, -0x20
+        addi sp, sp, -0x28
         sd ra, 0x00(sp)
-        sd zero, 0x08(sp)
+        sd a0, 0x08(sp)
         sd zero, 0x10(sp)
         sd zero, 0x18(sp)
+        sd zero, 0x20(sp)
         beqz a0, .Luncons_ret # nil
         li t1, LISP_OBJECT_TYPE_CONS
         lwu t2, LISP_OBJECT_TYPE(a0)
@@ -28,10 +29,10 @@ uncons:
         # success - get value
         li t1, 1
         ld t2, LISP_CONS_HEAD(a0)
-        ld t3, LISP_CONS_TAIL(a1)
-        sd t1, 0x08(sp)
-        sd t2, 0x10(sp)
-        sd t3, 0x18(sp)
+        ld t3, LISP_CONS_TAIL(a0)
+        sd t1, 0x10(sp)
+        sd t2, 0x18(sp)
+        sd t3, 0x20(sp)
         # acquire HEAD
         mv a0, t2
         call acquire_object
@@ -40,12 +41,13 @@ uncons:
         call acquire_object
 .Luncons_ret:
         # always release
+        ld a0, 0x08(sp)
         call release_object
         ld ra, 0x00(sp)
-        ld a0, 0x08(sp)
-        ld a1, 0x10(sp)
-        ld a2, 0x18(sp)
-        addi sp, sp, 0x20
+        ld a0, 0x10(sp)
+        ld a1, 0x18(sp)
+        ld a2, 0x20(sp)
+        addi sp, sp, 0x28
         ret
 
 # make integer object from int in a0
@@ -62,7 +64,7 @@ box_integer:
 # Returns nil if not cons
 .global car
 car:
-        add sp, sp, 0x10
+        add sp, sp, -0x10
         sd ra, 0x00(sp)
         sd zero, 0x08(sp) # head
         call uncons
@@ -75,6 +77,7 @@ car:
 .Lcar_ret:
         ld ra, 0x00(sp)
         ld a0, 0x08(sp)
+        addi sp, sp, 0x10
         ret
 
 # Return only tail from cons in a0
@@ -82,7 +85,7 @@ car:
 # Returns nil if not cons
 .global cdr
 cdr:
-        add sp, sp, 0x10
+        add sp, sp, -0x10
         sd ra, 0x00(sp)
         sd zero, 0x08(sp) # tail
         call uncons
@@ -95,6 +98,7 @@ cdr:
 .Lcdr_ret:
         ld ra, 0x00(sp)
         ld a0, 0x08(sp)
+        addi sp, sp, 0x10
         ret
 
 # load integer from boxed int (a0) and release it
@@ -139,11 +143,12 @@ box_procedure:
 # a2 = data
 .global unbox_procedure
 unbox_procedure:
-        addi sp, sp, -0x20
+        addi sp, sp, -0x28
         sd ra, 0x00(sp)
         sd zero, 0x08(sp)
         sd zero, 0x10(sp)
         sd zero, 0x18(sp)
+        sd a0, 0x20(sp)
         beqz a0, .Lunbox_procedure_ret # nil
         li t1, LISP_OBJECT_TYPE_PROCEDURE
         lwu t2, LISP_OBJECT_TYPE(a0)
@@ -160,12 +165,13 @@ unbox_procedure:
         call acquire_object
 .Lunbox_procedure_ret:
         # always release
+        ld a0, 0x20(sp)
         call release_object
         ld ra, 0x00(sp)
         ld a0, 0x08(sp)
         ld a1, 0x10(sp)
         ld a2, 0x18(sp)
-        addi sp, sp, 0x20
+        addi sp, sp, 0x28
         ret
 
 # sets up a new object and initializes refcount ONLY.

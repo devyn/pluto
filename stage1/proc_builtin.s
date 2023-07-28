@@ -133,26 +133,24 @@ proc_call_native:
         bltu t1, t2, 2b
 1:
         beqz s2, .Lproc_call_native_invoke # no more arguments
-        # ensure arg list is cons
-        lwu t1, LISP_OBJECT_TYPE(s2)
-        li t2, LISP_OBJECT_TYPE_CONS
-        bne t1, t2, .Lproc_call_native_error
-        # get head
-        ld a0, LISP_CONS_HEAD(s2)
-        # evaluate expression
+        # destructure (a1 . a2)
+        mv a0, s2
+        mv s2, zero
+        call uncons
+        beqz a0, .Lproc_call_native_error # not cons
+        mv s2, a2 # put tail as next arg list
+        # eval head
+        mv a0, a1
         ld a1, 0x18(sp)
+        call acquire_locals
         call eval
         bnez a0, .Lproc_call_native_ret # eval error
-        # check result type integer
-        beqz a1, .Lproc_call_native_error # result nil
-        lwu t2, LISP_OBJECT_TYPE(a1)
-        li t3, LISP_OBJECT_TYPE_INTEGER
-        bne t2, t3, .Lproc_call_native_error
-        # put value to s1
-        ld t2, LISP_INTEGER_VALUE(a1)
-        sd t2, (s1)
-        # get tail
-        ld s2, LISP_CONS_TAIL(s2)
+        # unbox the integer value
+        mv a0, a1
+        call unbox_integer
+        beqz a0, .Lproc_call_native_error # not an integer
+        # store integer on stack
+        sd a1, (s1)
         # advance
         addi s1, s1, 8
         j 1b
@@ -194,9 +192,19 @@ proc_call_native:
 .Lproc_call_native_error:
         li a0, EVAL_ERROR_EXCEPTION
 .Lproc_call_native_ret:
+        # stash a0, a1 and release remaining owned data
+        sd a0, 0x20(sp)
+        sd a1, 0x28(sp)
+        ld a0, 0x18(sp)
+        call release_object # local words table
+        mv a0, s2 # arg list (if remaining)
+        call release_object
+        # restore, clean up stack
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
         ld s2, 0x10(sp)
+        ld a0, 0x20(sp)
+        ld a1, 0x28(sp)
         addi sp, sp, 0x68
         ret
 

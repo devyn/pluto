@@ -130,9 +130,7 @@ symbol_intern:
         j .Lsymbol_intern_ret
 .Lsymbol_intern_found_ret:
         # increment refcount before returning
-        lw t0, LISP_OBJECT_REFCOUNT(a0)
-        addi t0, t0, 1
-        sw t0, LISP_OBJECT_REFCOUNT(a0)
+        call acquire_object
 .Lsymbol_intern_ret:
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
