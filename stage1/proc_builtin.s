@@ -222,11 +222,10 @@ proc_peek_start:
         call eval
         bnez a0, .Lproc_peek_ret # on error
         # get value of integer
-        beqz a1, .Lproc_peek_error
-        li t1, LISP_OBJECT_TYPE_INTEGER
-        lwu t2, LISP_OBJECT_TYPE(a1)
-        bne t1, t2, .Lproc_peek_error
-        ld a0, LISP_INTEGER_VALUE(a1)
+        mv a0, a1
+        call unbox_integer
+        beqz a0, .Lproc_peek_error
+        mv a0, a1
         ld t0, 0x10(sp)
         jalr zero, (t0) # subvariant
 .Lproc_peek_error:
@@ -282,41 +281,38 @@ proc_poke:
         sd s3, 0x20(sp) # value
         sd s4, 0x28(sp) # subvariant code
         sd zero, 0x30(sp) # original address
-        mv s1, a0
         mv s4, a3
         # Get address
-        call car
+        call uncons
+        mv s1, a2 # save rest of list
+        mv a0, a1
         ld a1, 0x08(sp)
         call eval
         bnez a0, .Lproc_poke_end
-        # Check if a1 is integer
-        beqz a1, .Lproc_poke_error
-        li t2, LISP_OBJECT_TYPE_INTEGER
-        lwu t3, LISP_OBJECT_TYPE(a1)
-        bne t2, t3, .Lproc_poke_error
-        sd a1, 0x30(sp) # save the integer obj on stack
         # Get integer value as s2 (address)
-        ld s2, LISP_INTEGER_VALUE(a1)
+        mv a0, a1
+        call acquire_object
+        sd a0, 0x30(sp) # save the integer obj on the stack
+        call unbox_integer
+        beqz a0, .Lproc_poke_error
+        mv s3, a1
 1:
         # Get next argument list
         mv a0, s1
-        call cdr
-        mv s1, a0
+        call uncons
+        mv s1, a2 # save rest of list
         # End if list is empty
         beqz a0, .Lproc_poke_end
-        # Get next argument
-        call car
         # Evaluate argument
+        mv a0, a1
         ld a1, 0x08(sp)
         call eval
         bnez a0, .Lproc_poke_end
-        # Check if a1 is integer
-        beqz a1, .Lproc_poke_error
-        li t2, LISP_OBJECT_TYPE_INTEGER
-        lwu t3, LISP_OBJECT_TYPE(a1)
-        bne t2, t3, .Lproc_poke_error
         # Get integer value as s3 (value)
-        ld s3, LISP_INTEGER_VALUE(a1)
+        mv a0, a1
+        call unbox_integer
+        beqz a0, .Lproc_poke_error
+        mv s3, a1
         # Call subvariant code to store the value and increment address
         jalr t0, (s4)
         # Loop
@@ -324,6 +320,13 @@ proc_poke:
 .Lproc_poke_error:
         li a0, EVAL_ERROR_EXCEPTION
 .Lproc_poke_end:
+        addi sp, sp, -8
+        sd a0, (sp)
+        # release arg list
+        mv a0, s1
+        call release_object
+        ld a0, (sp)
+        addi sp, sp, 8
         ld ra, 0x00(sp)
         ld s1, 0x10(sp)
         ld s2, 0x18(sp)
@@ -447,20 +450,22 @@ proc_stub:
         sd a0, 0x10(sp) # args
         sd a1, 0x18(sp) # locals
         sd a2, 0x20(sp) # data
+        mv s1, zero
         # goal: set up eval call a0/a1 then jump
         # first goal: create ((locals . <a1>) (args . <a0>) . <data.0>)
         mv a0, a2
-        call car
         call acquire_object
-        mv s1, a0
+        call uncons
+        mv s1, a1
         # s1 = <data.0>
-        ld a0, 0x20(sp)
-        call cdr
-        sd a0, 0x20(sp)
-        call car
-        # a0 = args symbol
-        beqz a0, 1f # skip if nil
+        mv a0, a2
+        call uncons
+        # a1 = args symbol
+        mv a0, a1
+        sd a2, 0x20(sp) # save tail
+        beqz a0, 2f # skip if nil
         ld a1, 0x10(sp)
+        sd zero, 0x10(sp)
         call cons
         beqz a0, .Lproc_stub_error
         # now cons the args pair to the s1 list
@@ -468,15 +473,21 @@ proc_stub:
         call cons
         beqz a0, .Lproc_stub_error
         mv s1, a0
+        j 1f
+2:
+        # drop a1/args, not used
+        mv a0, a1
+        call release_object
 1:
         # s1 = ((args . <a0>) . <data.0>)
         ld a0, 0x20(sp)
-        call cdr
-        sd a0, 0x20(sp)
-        call car
-        # a0 = locals symbol
-        beqz a0, 1f # skip if nil
+        call uncons
+        # a1 = locals symbol
+        mv a0, a1
+        sd a2, 0x20(sp) # save tail
+        beqz a0, 2f # skip if nil
         ld a1, 0x18(sp)
+        sd zero, 0x18(sp)
         call cons
         beqz a0, .Lproc_stub_error
         # now cons the locals pair to the s1 list
@@ -484,11 +495,15 @@ proc_stub:
         call cons
         beqz a0, .Lproc_stub_error
         mv s1, a0
+        j 1f
+2:
+        # drop a1/locals, not used
+        mv a0, a1
+        call release_object
 1:
         # s1 is setup, should be a1 for the eval
         # get a0 (expression)
         ld a0, 0x20(sp)
-        call cdr
         call car
         # expression in a0, now a1 = s1
         mv a1, s1
@@ -498,6 +513,15 @@ proc_stub:
         addi sp, sp, 0x28
         j eval
 .Lproc_stub_error:
+        # release args/locals/data
+        ld a0, 0x10(sp)
+        call release_object
+        ld a0, 0x18(sp)
+        call release_object
+        ld a0, 0x20(sp)
+        call release_object
+        mv a0, s1
+        call release_object
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
         addi sp, sp, 0x28
