@@ -295,7 +295,7 @@ proc_poke:
         sd a0, 0x30(sp) # save the integer obj on the stack
         call unbox_integer
         beqz a0, .Lproc_poke_error
-        mv s3, a1
+        mv s2, a1
 1:
         # Get next argument list
         mv a0, s1
@@ -454,7 +454,6 @@ proc_stub:
         # goal: set up eval call a0/a1 then jump
         # first goal: create ((locals . <a1>) (args . <a0>) . <data.0>)
         mv a0, a2
-        call acquire_object
         call uncons
         mv s1, a1
         # s1 = <data.0>

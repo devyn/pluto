@@ -202,12 +202,12 @@ builtin_deallocate_object:
         beqz t1, .Lbuiltin_deallocate_object_ret # can't deallocate bitmap
         addi t1, t1, -1 # subtract one (bitmap slot)
         # which doubleword (64 bits) is that? 1 << 6 = 64
-        slli t2, t1, 6 # doubleword offset
+        srli t2, t1, 6 # doubleword offset
         andi t1, t1, (1 << 6) - 1 # bit inside doubleword
         # calculate mask for clearing that bit
         li t3, 1
         sll t3, t3, t1
-        xor t3, t3, zero # invert
+        xori t3, t3, -1 # invert
         # load, mask, store
         add t0, t0, t2 # add doubleword offset
         ld t4, (t0)
@@ -251,7 +251,8 @@ deallocate_object:
         sd s1, 8(sp) # s1 = saved object address
         sd s2, 16(sp) # s2 = object type
         mv s1, a0
-        lwu s2, LISP_OBJECT_TYPE(sp)
+        lwu s2, LISP_OBJECT_TYPE(s1)
+        beqz s2, .Ldeallocate_object_zero # most likely double free
 .Ldeallocate_object_cons:
         # check for CONS
         li t0, LISP_OBJECT_TYPE_CONS
@@ -284,10 +285,22 @@ deallocate_object:
         ld a0, LISP_PROCEDURE_DATA(s1)
         beqz a0, .Ldeallocate_object_end
         call release_object
+        j .Ldeallocate_object_end
+.Ldeallocate_object_zero:
+        # print z address and return without deallocating
+        li a0, 'z'
+        call putc
+        mv a0, s1
+        li a1, 16
+        call put_hex
+        li a0, '\n'
+        call putc
+        j 1f
 .Ldeallocate_object_end:
         mv a0, s1
         li a1, LISP_OBJECT_SIZE
         call deallocate
+1:
         ld ra, 0(sp)
         ld s1, 8(sp)
         ld s2, 16(sp)
