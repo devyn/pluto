@@ -284,6 +284,14 @@ deallocate_object:
         beqz a0, .Ldeallocate_object_end
         call release_object
         j .Ldeallocate_object_end
+.Ldeallocate_object_symbol:
+        # check for SYMBOL
+        li t0, LISP_OBJECT_TYPE_SYMBOL
+        bne s2, t0, .Ldeallocate_object_end
+        # symbols should never be released
+        mv a0, s1
+        call acquire_object
+        j 1f
 .Ldeallocate_object_zero:
         # print z address and return without deallocating
         li a0, 'z'
