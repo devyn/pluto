@@ -11,23 +11,6 @@ HELLO_MSG_LENGTH: .quad . - HELLO_MSG
 
 .text
 
-# Release object during end of proc
-# Preserves a0, a1
-# Address to release in a2
-.global release_proc_end
-release_proc_end:
-        addi sp, sp, -0x18
-        sd ra, 0x00(sp)
-        sd a0, 0x08(sp)
-        sd a1, 0x10(sp)
-        mv a0, a2
-        call release_object
-        ld ra, 0x00(sp)
-        ld a0, 0x08(sp)
-        ld a1, 0x10(sp)
-        addi sp, sp, 0x18
-        ret
-
 .global proc_hello
 proc_hello:
         addi sp, sp, -8
@@ -82,34 +65,28 @@ proc_ref:
 # Read address to Lisp object and return (does not add refcount)
 .global proc_deref
 proc_deref:
-        addi sp, sp, -0x18
+        addi sp, sp, -0x10
         sd ra, 0x00(sp)
-        sd a0, 0x08(sp)
-        sd a1, 0x10(sp)
+        sd a1, 0x08(sp)
         call car
         # a0 = first argument
-        ld a1, 0x10(sp) # local words list
+        ld a1, 0x08(sp) # local words list
         call eval
         bnez a0, .Lproc_deref_ret # on error
         mv a0, a1
         beqz a0, .Lproc_deref_error # can't resolve to nil
-        # check if integer
-        li t1, LISP_OBJECT_TYPE_INTEGER
-        lwu t2, LISP_OBJECT_TYPE(a0)
-        bne t1, t2, .Lproc_deref_error
-        # get value and return it as the return value ptr
-        ld a1, LISP_INTEGER_VALUE(a0)
+        # get value
+        call unbox_integer
+        beqz a0, .Lproc_deref_error
+        # return value int in a1, treat as address to obj, set a0 = zero (no error)
         mv a0, zero
         j .Lproc_deref_ret
 .Lproc_deref_error:
         li a0, EVAL_ERROR_EXCEPTION
         mv a1, zero
 .Lproc_deref_ret:
-        # release arg
-        ld a2, 0x08(sp)
-        call release_proc_end
-        ld ra, 0(sp)
-        addi sp, sp, 0x18
+        ld ra, 0x00(sp)
+        addi sp, sp, 0x10
         ret
 
 # Lisp procedure for calling native routines.
