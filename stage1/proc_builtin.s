@@ -72,7 +72,8 @@ proc_ref:
         mv a0, zero
         j .Lproc_ref_ret
 .Lproc_ref_error:
-        li a0, EVAL_ERROR_EXCEPTION
+        li a0, EVAL_ERROR_NO_FREE_MEM
+        mv a1, zero
 .Lproc_ref_ret:
         ld ra, 0x00(sp)
         addi sp, sp, 0x10
@@ -102,6 +103,7 @@ proc_deref:
         j .Lproc_deref_ret
 .Lproc_deref_error:
         li a0, EVAL_ERROR_EXCEPTION
+        mv a1, zero
 .Lproc_deref_ret:
         # release arg
         ld a2, 0x08(sp)
@@ -137,7 +139,7 @@ proc_call_native:
         mv a0, s2
         mv s2, zero
         call uncons
-        beqz a0, .Lproc_call_native_error # not cons
+        beqz a0, .Lproc_call_native_exc # not cons
         mv s2, a2 # put tail as next arg list
         # eval head
         mv a0, a1
@@ -148,7 +150,7 @@ proc_call_native:
         # unbox the integer value
         mv a0, a1
         call unbox_integer
-        beqz a0, .Lproc_call_native_error # not an integer
+        beqz a0, .Lproc_call_native_exc # not an integer
         # store integer on stack
         sd a1, (s1)
         # advance
@@ -173,24 +175,29 @@ proc_call_native:
         # make list (a0 a1)
         mv a0, a1
         call box_integer
-        beqz a0, .Lproc_call_native_error
+        beqz a0, .Lproc_call_native_nomem
         mv a1, zero
         call cons
-        beqz a0, .Lproc_call_native_error
+        beqz a0, .Lproc_call_native_nomem
         # ==> (a1)
         mv s1, a0
         ld a0, 0x28(sp)
         call box_integer
-        beqz a0, .Lproc_call_native_error
+        beqz a0, .Lproc_call_native_nomem
         mv a1, s1
         call cons
-        beqz a0, .Lproc_call_native_error
+        beqz a0, .Lproc_call_native_nomem
         # ==> (a0 . (a1))
         mv a1, a0
         mv a0, zero # ok
         j .Lproc_call_native_ret 
-.Lproc_call_native_error:
+.Lproc_call_native_exc:
         li a0, EVAL_ERROR_EXCEPTION
+        mv a1, zero
+        j .Lproc_call_native_ret
+.Lproc_call_native_nomem:
+        li a0, EVAL_ERROR_NO_FREE_MEM
+        mv a1, zero
 .Lproc_call_native_ret:
         # stash a0, a1 and release remaining owned data
         sd a0, 0x20(sp)
@@ -230,6 +237,7 @@ proc_peek_start:
         jalr zero, (t0) # subvariant
 .Lproc_peek_error:
         li a0, EVAL_ERROR_EXCEPTION
+        mv a1, zero
         j .Lproc_peek_ret
 
 .local proc_peek_end
@@ -319,6 +327,7 @@ proc_poke:
         j 1b
 .Lproc_poke_error:
         li a0, EVAL_ERROR_EXCEPTION
+        mv a1, zero
 .Lproc_poke_end:
         addi sp, sp, -8
         sd a0, (sp)
@@ -435,7 +444,8 @@ proc_proc:
         mv a0, zero
         j .Lproc_proc_ret
 .Lproc_proc_error:
-        li a0, EVAL_ERROR_EXCEPTION
+        li a0, EVAL_ERROR_NO_FREE_MEM
+        mv a1, zero
 .Lproc_proc_ret:
         ld ra, 0x00(sp)
         addi sp, sp, 0x08
@@ -524,7 +534,8 @@ proc_stub:
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
         addi sp, sp, 0x28
-        li a0, EVAL_ERROR_EXCEPTION
+        li a0, EVAL_ERROR_NO_FREE_MEM
+        mv a1, zero
         ret
 
 # (eval <locals> <expression>)

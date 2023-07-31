@@ -15,7 +15,7 @@
 #
 # return:
 # a0 = error if < 0 (EVAL_ERROR_*)
-# a1 = return value
+# a1 = return value / error details object
 .global eval
 eval:
         addi sp, sp, -0x20
@@ -57,16 +57,23 @@ eval:
 .Leval_symbol:
         # if it's a symbol we just look it up
         mv a0, s1
+        call acquire_object # keep symbol, in case error
         mv a1, s2
         call lookup_var
-        mv s1, zero # used
         mv s2, zero # used
         beqz a0, .Leval_error_undefined
-        mv a0, zero
+        # release the symbol
+        mv s2, a1 # save found value
+        mv a0, s1
+        call release_object
+        mv a0, zero # success
+        mv a1, s2   # found value
+        mv s1, zero # used
+        mv s2, zero # used
         j .Leval_ret
 .Leval_error_undefined:
         li a0, EVAL_ERROR_UNDEFINED
-        mv a1, zero
+        mv a1, s1 # saved symbol as error details
         j .Leval_ret
 .Leval_literal:
         mv a0, zero

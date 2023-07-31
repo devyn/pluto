@@ -112,12 +112,27 @@ start:
         ld a1, (NOT_CALLABLE_MSG_LENGTH)
         j .Lstart_eval_error_msg
 1:
+        li t1, EVAL_ERROR_NO_FREE_MEM
+        bne s5, t1, 1f
+        la a0, NO_FREE_MEM_MSG
+        ld a1, (NO_FREE_MEM_MSG_LENGTH)
+        j .Lstart_eval_error_msg
+1:
+        # unrecognized error: !<a0> <a1>
+        li a0, '!'
+        call putc
         mv a0, s5
+        li a1, 16
+        call put_hex
+        li a0, ' '
+        call putc
+        mv a0, s6
         li a1, 16
         call put_hex
         j .Lstart_eval_done
 .Lstart_eval_error_msg:
         call put_buf
+        j .Lstart_eval_ok # print error value too
 .Lstart_eval_done:
         # print two newlines
         li a0, '\n'
@@ -154,14 +169,17 @@ ERR_MSG_LENGTH: .quad . - ERR_MSG
 OVERFLOW_MSG: .ascii "overflow\n"
 OVERFLOW_MSG_LENGTH: .quad . - OVERFLOW_MSG
 
-EXCEPTION_MSG: .ascii "exception"
+EXCEPTION_MSG: .ascii "exception: "
 EXCEPTION_MSG_LENGTH: .quad . - EXCEPTION_MSG
 
-UNDEFINED_MSG: .ascii "undefined"
+UNDEFINED_MSG: .ascii "undefined: "
 UNDEFINED_MSG_LENGTH: .quad . - UNDEFINED_MSG
 
-NOT_CALLABLE_MSG: .ascii "not-callable"
+NOT_CALLABLE_MSG: .ascii "not-callable: "
 NOT_CALLABLE_MSG_LENGTH: .quad . - NOT_CALLABLE_MSG
+
+NO_FREE_MEM_MSG: .ascii "no-free-mem: "
+NO_FREE_MEM_MSG_LENGTH: .quad . - NO_FREE_MEM_MSG_LENGTH
 
 PRODUCE_MSG: .ascii "==> "
 PRODUCE_MSG_LENGTH: .quad . - PRODUCE_MSG
