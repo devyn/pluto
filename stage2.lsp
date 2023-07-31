@@ -238,7 +238,7 @@
                 (eval scope (car args))
                 (eval scope (cadr args))))
             ; tail recursive call with remainder of args
-            (unquote (cons self (cons value (cdr (cdr args))))))))
+            (eval scope (cons self (cons value (cdr (cdr args))))))))
       self)))
 
 ; define nicer versions of the core math ops we put into memory earlier
