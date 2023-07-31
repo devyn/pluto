@@ -74,6 +74,7 @@ eval:
 .Leval_error_undefined:
         li a0, EVAL_ERROR_UNDEFINED
         mv a1, s1 # saved symbol as error details
+        mv s1, zero # used
         j .Leval_ret
 .Leval_literal:
         mv a0, zero

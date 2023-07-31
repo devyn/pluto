@@ -258,14 +258,15 @@ proc_peek_d:
 # variant write in a3, addr s2, value s3, return to t0
 .local proc_poke
 proc_poke:
-        addi sp, sp, -0x38
+        addi sp, sp, -0x40
         sd ra, 0x00(sp)
         sd a1, 0x08(sp)
         sd s1, 0x10(sp) # current argument list pointer
         sd s2, 0x18(sp) # address
         sd s3, 0x20(sp) # value
         sd s4, 0x28(sp) # subvariant code
-        sd zero, 0x30(sp) # original address
+        sd zero, 0x30(sp) # return value a0
+        sd zero, 0x38(sp) # return value a1
         mv s4, a3
         # Get address
         call uncons
@@ -273,11 +274,11 @@ proc_poke:
         mv a0, a1
         ld a1, 0x08(sp)
         call eval
-        bnez a0, .Lproc_poke_end
+        bnez a0, .Lproc_poke_eval_error
         # Get integer value as s2 (address)
         mv a0, a1
         call acquire_object
-        sd a0, 0x30(sp) # save the integer obj on the stack
+        sd a0, 0x38(sp) # save the integer obj for return later
         call unbox_integer
         beqz a0, .Lproc_poke_error
         mv s2, a1
@@ -292,7 +293,7 @@ proc_poke:
         mv a0, a1
         ld a1, 0x08(sp)
         call eval
-        bnez a0, .Lproc_poke_end
+        bnez a0, .Lproc_poke_eval_error
         # Get integer value as s3 (value)
         mv a0, a1
         call unbox_integer
@@ -302,24 +303,32 @@ proc_poke:
         jalr t0, (s4)
         # Loop
         j 1b
+.Lproc_poke_eval_error:
+        # Store error code into 0x30(sp) = a0
+        sd a0, 0x30(sp)
+        # Shuffle a1 into 0x38(sp), where we will restore a1 later
+        ld t1, 0x38(sp)
+        sd a1, 0x38(sp)
+        # Release previous value of a1 (could be address)
+        mv a0, t1
+        call release_object
+        j .Lproc_poke_end
 .Lproc_poke_error:
         li a0, EVAL_ERROR_EXCEPTION
-        mv a1, zero
+        sd a0, 0x30(sp) # ret a0
 .Lproc_poke_end:
-        addi sp, sp, -8
-        sd a0, (sp)
         # release arg list
         mv a0, s1
         call release_object
-        ld a0, (sp)
-        addi sp, sp, 8
+        # restore saved & outputs, then return
         ld ra, 0x00(sp)
         ld s1, 0x10(sp)
         ld s2, 0x18(sp)
         ld s3, 0x20(sp)
         ld s4, 0x28(sp)
-        ld a1, 0x30(sp)
-        addi sp, sp, 0x38
+        ld a0, 0x30(sp)
+        ld a1, 0x38(sp)
+        addi sp, sp, 0x40
         ret
 
 .global proc_poke_b
