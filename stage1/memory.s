@@ -117,12 +117,14 @@ builtin_allocate_object:
         bgeu t0, t1, .Lbuiltin_allocate_object_not_free
         li t3, 64 # bits
         ld t4, (t0) # dw bitmap
+        beqz t2, 1f # the first bit is reserved for the bitmap, skip it
 .Lbuiltin_allocate_object_bits_loop:
         beqz t3, .Lbuiltin_allocate_object_bits_end
         # check bit
         andi t5, t4, 1
         # if zero, it's free
         beqz t5, .Lbuiltin_allocate_object_free
+1:
         # otherwise shift and increment/decrement counters
         srli t4, t4, 1
         addi t3, t3, -1
@@ -134,14 +136,11 @@ builtin_allocate_object:
         j .Lbuiltin_allocate_object_bitmap_loop
 .Lbuiltin_allocate_object_free:
         # bit index that was free = t2
-        # check if bit index = 256, since the last bit is unused
-        li t3, 256
-        beq t2, t3, .Lbuiltin_allocate_object_not_free
         # set the bit before proceeding
-        ld t4, (t0) # load
         andi t5, t2, 63 # t5 = bit offset within current map
         li t3, 1
         sll t3, t3, t5 # shift by offset to make that bit
+        ld t4, (t0) # load
         or t4, t4, t3 # set the bit
         sd t4, (t0) # store
         # store the pointer to the object region that had free space in OBJECT_REGION_PTR
@@ -150,15 +149,14 @@ builtin_allocate_object:
         la t1, OBJECT_REGION_PTR
         sd t0, (t1)
         # calculate address that was free
-        addi t2, t2, 1 # skip bitmap
         slli t2, t2, 5 # multiply x 32
         add a0, t0, t2 # add offset
         ret
 .Lbuiltin_allocate_object_not_free:
         # try next region
-        andi t0, t0, -32 # be sure to realign to beginning of the region
-        li t1, OBJECT_REGION_SIZE
-        add t0, t0, t1
+        srli t0, t0, 13 # divide by 8192
+        addi t0, t0, 1  # add one
+        slli t0, t0, 13 # mul by 8192
         # wrap to beginning if we reach end
         la t1, _object_region_end
         bltu t0, t1, 1f
@@ -200,18 +198,18 @@ builtin_deallocate_object:
         and t1, a0, t1
         srli t1, t1, 5 # 32 bytes
         beqz t1, .Lbuiltin_deallocate_object_ret # can't deallocate bitmap
-        addi t1, t1, -1 # subtract one (bitmap slot)
         # which doubleword (64 bits) is that? 1 << 6 = 64
         srli t2, t1, 6 # doubleword offset
-        andi t1, t1, (1 << 6) - 1 # bit inside doubleword
+        slli t2, t2, 3 # times 8 bytes
+        andi t1, t1, 63 # bit inside doubleword
         # calculate mask for clearing that bit
         li t3, 1
-        sll t3, t3, t1
+        sll t3, t3, t1 # 1 << (bit inside doubleword)
         xori t3, t3, -1 # invert
         # load, mask, store
         add t0, t0, t2 # add doubleword offset
         ld t4, (t0)
-        and t4, t4, t3
+        and t4, t4, t3 # apply mask to clear bit
         sd t4, (t0)
         # bit has been cleared, now free
         # zero out the object header to make it more obvious if used after free
