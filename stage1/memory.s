@@ -136,6 +136,9 @@ builtin_allocate_object:
         li t3, 64 # bits
         ld t4, (t0) # dw bitmap
         beqz t2, 1f # the first bit is reserved for the bitmap, skip it
+        # check if bitmap is full and if so, skip it
+        li t5, -1
+        beq t4, t5, .Lbuiltin_allocate_object_bits_skip
 .Lbuiltin_allocate_object_bits_loop:
         beqz t3, .Lbuiltin_allocate_object_bits_end
         # check bit
@@ -148,6 +151,9 @@ builtin_allocate_object:
         addi t3, t3, -1
         addi t2, t2, 1
         j .Lbuiltin_allocate_object_bits_loop
+.Lbuiltin_allocate_object_bits_skip:
+        # add remaining bit counter to t2 before skipping
+        add t2, t2, t3
 .Lbuiltin_allocate_object_bits_end:
         # next 8-byte bitmap
         addi t0, t0, 8
