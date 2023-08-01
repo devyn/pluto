@@ -1,12 +1,9 @@
 SECTIONS {
-	. = 0x82000000;
+	. = 0x80200000;
 	.text : { *(.text) }
 	.rodata : { *(.rodata) }
 	.data : { *(.data) }
 	.bss : { *(.bss) }
-
-	. = 0x82020000;
-	program_area : { *(program_area) }
 }
 
 ENTRY(start)

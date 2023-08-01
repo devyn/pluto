@@ -1,5 +1,8 @@
 .attribute arch, "rv64imzicsr"
 
+.set _program_area, 0x82000000
+.set _program_area_end, 0x82200000
+
 .text
 
 .global start
@@ -11,14 +14,15 @@ start:
         la a0, INIT_MSG
         call puts
         call recv_hex
-        call _program_area
+        li t0, _program_area
+        jalr ra, (t0)
         j shutdown
 
 # Fill the program area with zeroes
 .global zero_program_area
 zero_program_area:
-        la t0, _program_area
-        la t1, _program_area_end
+        li t0, _program_area
+        li t1, _program_area_end
 1:
         sd zero, (t0)
         addi t0, t0, 8
@@ -67,7 +71,7 @@ recv_hex:
         sd ra, 0(sp)
         sd s1, 8(sp)
         # current program offset in s1
-        la s1, _program_area
+        li s1, _program_area
 .Lrecv_hex_loop:
         # get_hex returns -1 if dot is received
         call get_hex
@@ -155,22 +159,12 @@ INIT_MSG:
         .ascii "Ready to receive hex bytes on console.\n"
         .asciz "End with dot (.), other characters ignored.\n"
 
-.data
+.bss
 
-.align 16
+.align 4
 
 .global _stack
 _stack: .skip 0x2000
 
 .global _stack_end
 .equ _stack_end, .
-
-.section program_area
-
-.align 16
-
-.global _program_area
-_program_area: .skip 0x200000
-
-.global _program_area_end
-.equ _program_area_end, .

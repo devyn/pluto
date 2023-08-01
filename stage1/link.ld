@@ -1,9 +1,9 @@
 MEMORY {
-	RAM (rwx) : ORIGIN = 0x82020000, LENGTH = 0x200000
+	RAM (rwx) : ORIGIN = 0x82000000, LENGTH = 0x200000
 }
 
 SECTIONS {
-	. = 0x82020000;
+	. = 0x82000000;
 	.text : { *(.text) }
 	.rodata : { *(.rodata) }
 	.data : { *(.data) }

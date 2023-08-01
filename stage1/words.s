@@ -29,7 +29,7 @@ WORDS: .skip WORDS_LEN * 8
 # 3. symbol text, variable length
 #
 # the beginning of each should be aligned to 8 bytes
-.align 8
+.align 3
 .global INITIAL_WORDS
 INITIAL_WORDS:
         .quad proc_hello

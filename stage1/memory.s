@@ -9,19 +9,23 @@
 # slots immediately following.
 .set OBJECT_REGION_SIZE, 8192
 
-.data
+.bss
 
+.align 3
 .global ALLOCATE
-ALLOCATE: .quad builtin_allocate
+ALLOCATE: .skip 8 # builtin_allocate
 
+.align 3
 .global DEALLOCATE
-DEALLOCATE: .quad builtin_deallocate
+DEALLOCATE: .skip 8 # builtin_deallocate
 
+.align 3
 .global BUILTIN_HEAP_PTR
-BUILTIN_HEAP_PTR: .quad _heap_start
+BUILTIN_HEAP_PTR: .skip 8 # _heap_start
 
+.align 3
 .global OBJECT_REGION_PTR
-OBJECT_REGION_PTR: .quad _object_region_start
+OBJECT_REGION_PTR: .skip 8 # _object_region_start
 
 .section heap
 
@@ -56,6 +60,20 @@ memory_init:
         addi sp, sp, -0x10
         sd ra, 0x00(sp)
         sd s1, 0x08(sp)
+        # initialize globals
+        la t1, builtin_allocate
+        la t2, ALLOCATE
+        sd t1, (t2)
+        la t1, builtin_deallocate
+        la t2, DEALLOCATE
+        sd t1, (t2)
+        la t1, _heap_start
+        la t2, BUILTIN_HEAP_PTR
+        sd t1, (t2)
+        la t1, _object_region_start
+        la t2, OBJECT_REGION_PTR
+        sd t1, (t2)
+        # zero memory management structures
         la s1, _object_region_start
 .Lmemory_init_loop:
         la t1, _object_region_end

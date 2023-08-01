@@ -6,6 +6,6 @@ stage0.elf: stage0/link.ld stage0/loader.o
 	$(LD) -T $< -o $@ $(filter %.o,$^)
 
 stage0/%.o: stage0/%.s
-	$(AS) -o $@ $<
+	$(AS) -fpic -o $@ $<
 
 .PHONY: clean-stage0
