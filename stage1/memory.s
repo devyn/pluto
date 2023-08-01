@@ -26,13 +26,13 @@ OBJECT_REGION_PTR: .quad _object_region_start
 .section heap
 
 .global _heap_start
-_heap_start: .skip 0x40000 # 256 KiB
+_heap_start: .skip 0x80000 # 512 KiB
 .equ _heap_end, .
 
 .section object_region
 
 .global _object_region_start
-_object_region_start: .skip 0x40000 # 256 KiB
+_object_region_start: .skip 0xc0000 # 768 KiB
 .equ _object_region_end, .
 
 .text
