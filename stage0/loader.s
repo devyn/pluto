@@ -1,9 +1,11 @@
-.attribute arch, "rv64im"
+.attribute arch, "rv64imzicsr"
 
 .text
 
 .global start
 start:
+        # clear interrupts
+        csrrw zero, sie, zero # disable all interrupts
         la sp, _stack_end
         call zero_program_area
         la a0, INIT_MSG
