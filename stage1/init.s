@@ -1,4 +1,4 @@
-.attribute arch, "rv64im"
+.attribute arch, "rv64imzicsr"
 
 .include "parser.h.s"
 .include "eval.h.s"
@@ -16,13 +16,20 @@ LINE_BUF: .skip 1024
 .global start
 start:
         mv s1, ra
+        call trap_init
         la a0, INIT_MSG
         ld a1, (INIT_MSG_LENGTH)
         call put_buf
         # other initialization
         call memory_init
+        li a0, '.'
+        call putc
         call symbol_init
+        li a0, '.'
+        call putc
         call words_init
+        li a0, '\n'
+        call putc
 .Lstart_init_parser:
         # init the parser array
         la s2, PARSER_ARRAY
@@ -155,13 +162,61 @@ start:
         mv ra, s1
         ret
 
+.global trap_init
+trap_init:
+        la t1, trap
+        csrrw zero, stvec, t1 # set trap handler
+        ret
+
+.global trap
+trap:
+        mv s1, ra
+        la a0, TRAP_MSG
+        ld a1, (TRAP_MSG_LENGTH)
+        call put_buf
+        # sstatus
+        csrrw a0, sstatus, zero
+        li a1, 16
+        call put_hex
+        li a0, ' '
+        call putc
+        # sepc
+        csrrw a0, sepc, zero
+        li a1, 16
+        call put_hex
+        li a0, ' '
+        call putc
+        # scause
+        csrrw a0, scause, zero
+        li a1, 16
+        call put_hex
+        li a0, ' '
+        call putc
+        # stval
+        csrrw a0, stval, zero
+        li a1, 16
+        call put_hex
+        li a0, ' '
+        call putc
+        # ra
+        mv a0, s1
+        li a1, 16
+        call put_hex
+1:
+        # loop forever
+        wfi
+        j 1b
+
 .section .rodata
 
-INIT_MSG: .ascii "\nstage1 initializing.\n"
+INIT_MSG: .ascii "\nstage1 initializing."
 INIT_MSG_LENGTH: .quad . - INIT_MSG
 
 PROMPT: .ascii "> "
 PROMPT_LENGTH: .quad . - PROMPT
+
+TRAP_MSG: .ascii "trap [sstatus sepc scause stval ra]: "
+TRAP_MSG_LENGTH: .quad . - TRAP_MSG
 
 ERR_MSG: .ascii "err\n"
 ERR_MSG_LENGTH: .quad . - ERR_MSG
