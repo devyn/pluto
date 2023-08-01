@@ -277,7 +277,7 @@
         (<< (& imm (bit-mask 0xc)) 0x14)))))
 (define rv.instr.s
   (fn (opcode funct3)
-    (fn (opcode rs2 imm rs1)
+    (fn (rs2 imm rs1)
       (| (& opcode rv.opcode-mask)
         (<< (& imm (bit-mask 0x5)) 0x7)
         (<< (& funct3 rv.funct3-mask) 0xc)
@@ -286,7 +286,7 @@
         (<< (& (>> imm 0x5) (bit-mask 0x7)) 0x19)))))
 (define rv.instr.b
   (fn (opcode funct3)
-    (fn (opcode rs1 rs2 imm)
+    (fn (rs1 rs2 imm)
       (| (& opcode rv.opcode-mask)
         (<< (& (>> imm 0xb) 0x1) 0x7)
         (<< (& (>> imm 0x1) (bit-mask 0x4)) 0x8)
@@ -295,6 +295,23 @@
         (<< (& rs2 rv.reg-mask) 0x14)
         (<< (& (>> imm 0x5) (bit-mask 0x5)) 0x19)
         (<< (& (>> imm 0xc) 0x1) 0x1f)))))
+(define rv.instr.u
+  (fn (opcode)
+    (fn (rd imm)
+      (| (& opcode rv.opcode-mask)
+        (<< (& rd rv.reg-mask) 0x7)
+        (+ ; add one if 11th bit is set
+          (& imm (<< (bit-mask 0x14) 0xc))
+          (<< (& imm 0x800) 0x1))))))
+(define rv.instr.j
+  (fn (opcode)
+    (fn (rd imm)
+      (| (& opcode rv.opcode-mask)
+        (<< (& rd rv.reg-mask) 0x7)
+        (& imm (<< (bit-mask 0x8) 0xc))           ; inst[19:12] = imm[19:12]
+        (<< (& (>> imm 0xb) 0x1) 0x14)            ; inst[20]    = imm[11]
+        (<< (& (>> imm 0x1) (bit-mask 0xa)) 0x15) ; inst[30:21] = imm[10:1]
+        (<< (& (>> imm 0x14) 0x1) 0x1f)))))       ; inst[31]    = imm[20]
 
 ; RISC-V registers
 (define $zero 0x0)
@@ -331,11 +348,82 @@
 (define $t5 0x1e)
 (define $t6 0x1f)
 
-; RISC-V instructions
-(define \lb (rv.instr.i 0x3 0x0))
-(define \lh (rv.instr.i 0x3 0x1))
-(define \lw (rv.instr.i 0x3 0x2))
-(define \ld (rv.instr.i 0x3 0x3))
-(define \lbu (rv.instr.i 0x3 0x4))
-(define \lhu (rv.instr.i 0x3 0x5))
-(define \lwu (rv.instr.i 0x3 0x6))
+; RV32I instructions
+(define \lui   (rv.instr.u 0x37))
+(define \auipc (rv.instr.u 0x17))
+(define \jal   (rv.instr.j 0x6f))
+(define \jalr  (rv.instr.i 0x67 0x0))
+(define \beq   (rv.instr.b 0x63 0x0))
+(define \bne   (rv.instr.b 0x63 0x1))
+(define \blt   (rv.instr.b 0x63 0x4))
+(define \bge   (rv.instr.b 0x63 0x5))
+(define \bltu  (rv.instr.b 0x63 0x6))
+(define \bgeu  (rv.instr.b 0x63 0x7))
+(define \lb    (rv.instr.i 0x3 0x0))
+(define \lh    (rv.instr.i 0x3 0x1))
+(define \lw    (rv.instr.i 0x3 0x2))
+(define \lbu   (rv.instr.i 0x3 0x4))
+(define \lhu   (rv.instr.i 0x3 0x5))
+(define \sb    (rv.instr.s 0x23 0x0))
+(define \sh    (rv.instr.s 0x23 0x1))
+(define \sw    (rv.instr.s 0x23 0x2))
+(define \addi  (rv.instr.i 0x13 0x0))
+(define \slti  (rv.instr.i 0x13 0x2))
+(define \sltiu (rv.instr.i 0x13 0x3))
+(define \xori  (rv.instr.i 0x13 0x4))
+(define \ori   (rv.instr.i 0x13 0x6))
+(define \andi  (rv.instr.i 0x13 0x7))
+(define \slli  (rv.instr.r 0x13 0x1 0x0))
+(define \srli  (rv.instr.r 0x13 0x5 0x0))
+(define \srai  (rv.instr.r 0x13 0x5 0x20))
+(define \add   (rv.instr.r 0x33 0x0 0x0))
+(define \sub   (rv.instr.r 0x33 0x0 0x20))
+(define \sll   (rv.instr.r 0x33 0x1 0x0))
+(define \slt   (rv.instr.r 0x33 0x2 0x0))
+(define \sltu  (rv.instr.r 0x33 0x3 0x0))
+(define \xor   (rv.instr.r 0x33 0x4 0x0))
+(define \srl   (rv.instr.r 0x33 0x5 0x0))
+(define \sra   (rv.instr.r 0x33 0x5 0x20))
+(define \or    (rv.instr.r 0x33 0x6 0x0))
+(define \and   (rv.instr.r 0x33 0x7 0x0))
+; fence is complicated, leaving it out for now
+(define \ecall  0x73)
+(define \ebreak 0x100073)
+
+; RV64I instructions
+(define \lwu   (rv.instr.i 0x3 0x6))
+(define \ld    (rv.instr.i 0x3 0x3))
+(define \sd    (rv.instr.s 0x23 0x3))
+(define \addiw (rv.instr.i 0x1b 0x0))
+(define \slliw (rv.instr.r 0x1b 0x1 0x0))
+(define \srliw (rv.instr.r 0x1b 0x5 0x0))
+(define \sraiw (rv.instr.r 0x1b 0x5 0x20))
+(define \addw  (rv.instr.r 0x3b 0x0 0x0))
+(define \subw  (rv.instr.r 0x3b 0x0 0x20))
+(define \sllw  (rv.instr.r 0x3b 0x1 0x0))
+(define \srlw  (rv.instr.r 0x3b 0x5 0x0))
+(define \sraw  (rv.instr.r 0x3b 0x5 0x20))
+
+; try a simple assembler program
+(define awesome.str$ (allocate 0x8 0x1))
+(poke.b awesome.str$
+  0x61 0x77 0x65 0x73 0x6f 0x6d 0x65 0x0a
+)
+(define awesome$ (allocate 0x28 0x8))
+(poke.w awesome$
+  ; load string to a0
+  (\auipc $t0       0x0)
+  (\ld    $a0 $t0   0x18)
+  ; set length = 8
+  (\addi  $a1 $zero 0x8)
+  ; load address of put-buf and jump to it
+  (\ld    $t0 $t0   0x20)
+  (\jalr  $zero $t0 0x0)
+  0x0
+  ; constants in-line because calculating instructions to load address is too hard
+  awesome.str$
+  (>> awesome.str$ 0x20)
+  put-buf$
+  (>> put-buf$ 0x20)
+)
+(call-native awesome$)
