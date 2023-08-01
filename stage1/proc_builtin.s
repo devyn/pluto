@@ -13,28 +13,39 @@ HELLO_MSG_LENGTH: .quad . - HELLO_MSG
 
 .global proc_hello
 proc_hello:
-        addi sp, sp, -8
-        sd ra, 0(sp)
+        addi sp, sp, -0x10
+        sd ra, 0x00(sp)
+        sd a1, 0x08(sp)
+        # release args and locals
+        call release_object
+        ld a0, 0x08(sp)
+        call release_object
+        # write msg
         la a0, HELLO_MSG
         ld a1, (HELLO_MSG_LENGTH)
         call put_buf
         mv a0, zero
         mv a1, zero
         ld ra, 0(sp)
-        addi sp, sp, 8
+        addi sp, sp, 0x10
         ret
 
 # Quote argument (return without evaluating)
 .global proc_quote
 proc_quote:
-        addi sp, sp, -8
-        sd ra, 0(sp)
+        addi sp, sp, -0x10
+        sd ra, 0x00(sp)
+        sd a0, 0x08(sp)
+        # release locals (unused)
+        mv a0, a1
+        call release_object
+        ld a0, 0x08(sp)
         call car
         # a0 = first argument
         mv a1, a0
         mv a0, zero
         ld ra, 0(sp)
-        addi sp, sp, 8
+        addi sp, sp, 0x10
         ret
 
 # Get address of argument (does not drop refcount)
@@ -260,7 +271,7 @@ proc_peek_d:
 proc_poke:
         addi sp, sp, -0x40
         sd ra, 0x00(sp)
-        sd a1, 0x08(sp)
+        sd a1, 0x08(sp) # locals
         sd s1, 0x10(sp) # current argument list pointer
         sd s2, 0x18(sp) # address
         sd s3, 0x20(sp) # value
@@ -273,6 +284,7 @@ proc_poke:
         mv s1, a2 # save rest of list
         mv a0, a1
         ld a1, 0x08(sp)
+        call acquire_locals
         call eval
         bnez a0, .Lproc_poke_eval_error
         # Get integer value as s2 (address)
@@ -292,6 +304,7 @@ proc_poke:
         # Evaluate argument
         mv a0, a1
         ld a1, 0x08(sp)
+        call acquire_locals
         call eval
         bnez a0, .Lproc_poke_eval_error
         # Get integer value as s3 (value)
@@ -319,6 +332,9 @@ proc_poke:
 .Lproc_poke_end:
         # release arg list
         mv a0, s1
+        call release_object
+        # release locals
+        ld a0, 0x08(sp)
         call release_object
         # restore saved & outputs, then return
         ld ra, 0x00(sp)
@@ -470,9 +486,10 @@ proc_stub:
         mv s1, a0
         j 1f
 2:
-        # drop a1/args, not used
-        mv a0, a1
+        # drop args, not used
+        ld a0, 0x10(sp)
         call release_object
+        sd zero, 0x10(sp)
 1:
         # s1 = ((args . <a0>) . <data.0>)
         ld a0, 0x20(sp)
@@ -492,9 +509,10 @@ proc_stub:
         mv s1, a0
         j 1f
 2:
-        # drop a1/locals, not used
-        mv a0, a1
+        # drop locals, not used
+        ld a0, 0x18(sp)
         call release_object
+        sd zero, 0x18(sp)
 1:
         # s1 is setup, should be a1 for the eval
         # get a0 (expression)

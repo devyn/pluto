@@ -273,16 +273,12 @@ deallocate_object:
         # check for CONS
         li t0, LISP_OBJECT_TYPE_CONS
         bne s2, t0, .Ldeallocate_object_string
-        # release head if not nil
+        # release head
         ld a0, LISP_CONS_HEAD(s1)
-        beqz a0, 1f
         call release_object
-        1:
-        # release tail if not nil
+        # release tail
         ld a0, LISP_CONS_TAIL(s1)
-        beqz a0, 1f
         call release_object
-        1:
         j .Ldeallocate_object_end
 .Ldeallocate_object_string:
         # check for STRING
@@ -297,9 +293,8 @@ deallocate_object:
         # check for PROCEDURE
         li t0, LISP_OBJECT_TYPE_PROCEDURE
         bne s2, t0, .Ldeallocate_object_end
-        # release data if not nil
+        # release data
         ld a0, LISP_PROCEDURE_DATA(s1)
-        beqz a0, .Ldeallocate_object_end
         call release_object
         j .Ldeallocate_object_end
 .Ldeallocate_object_symbol:

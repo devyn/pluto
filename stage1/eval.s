@@ -87,7 +87,7 @@ eval:
         sd a1, 0x08(sp)
         mv a0, s1
         call release_object
-        mv a1, s2
+        mv a0, s2
         call release_object
         ld a0, 0x00(sp)
         ld a1, 0x08(sp)
