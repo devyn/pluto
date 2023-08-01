@@ -7,15 +7,25 @@
 
 .global start
 start:
+        # preserve a0, a1 (args from firmware)
+        mv s1, a0
+        mv s2, a1
         # clear interrupts
         csrrw zero, sie, zero # disable all interrupts
+        # set up stack
         la sp, _stack_end
+        # zero the program area
         call zero_program_area
+        # receive data
         la a0, INIT_MSG
         call puts
         call recv_hex
+        # restore args and call
         li t0, _program_area
+        mv a0, s1
+        mv a1, s2
         jalr ra, (t0)
+        # on return, shut down
         j shutdown
 
 # Fill the program area with zeroes
