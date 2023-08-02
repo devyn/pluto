@@ -159,15 +159,36 @@
     (let1 ret-value (eval scope (cadr args))
       (seq1 (deref address) ret-value)))))
 
-; Returns 1 if the argument is nil
-(define nil?$ (allocate 0x8 0x4))
-(poke.w nil?$
+; Returns 1 if the argument is zero
+(define zero?$ (allocate 0x8 0x4))
+(poke.w zero?$
   0x00153513 ; seqz a0, a0
   0x00008067 ; ret
 )
+(define zero? (proc args scope
+  (car (call-native zero?$ (eval scope (car args))))))
+
+; Returns 1 if the argument is nil
 (define nil? (proc args scope
   (let1 value (ref (eval scope (car args)))
-    (cleanup value (car (call-native nil?$ value))))))
+    (cleanup value (car (call-native zero?$ value))))))
+
+; Returns 1 if the two numbers are equal
+(define number-eq? (proc args scope
+  (zero? (car (call-native ^$
+    (eval scope (car args))
+    (eval scope (cadr args)))))))
+
+; Returns 1 if two objects have the same address
+(define ref-eq? (proc args scope
+  (let1 a (ref (eval scope (car args)))
+    (let1 b (ref (eval scope (car args)))
+      (cleanup a
+        (cleanup b
+          (number-eq? a b)))))))
+
+; Symbol equality is same as ref equality
+(define symbol-eq? ref-eq?)
 
 ; evaluate all elements of a list
 (define eval-list
@@ -223,6 +244,16 @@
       (concat (assoc (car def-args) (eval-list scope args)) def-scope)
       (cadr def-args)))))
 
+; Get type number of object
+(define type-number-of (fn (arg)
+  (let1 address (ref arg)
+    (cleanup address (peek.w address)))))
+
+; Get refcount of object
+(define refcount-of (fn (arg)
+  (let1 address (ref arg)
+    (cleanup address (peek.w (car (call-native +$ address 0x4)))))))
+
 ; Create procedure from native math routine
 ; (proc.native-math <address>)
 ; These can take any number of arguments and fold them. e.g. (+ a b c) = a + b + c
@@ -248,6 +279,28 @@
 (define & (fn.native-math &$))
 (define | (fn.native-math |$))
 (define ^ (fn.native-math ^$))
+
+; Get type of object as symbol
+(define types$ (allocate 0x40 0x8))
+(poke.d types$
+  (ref (quote none))
+  (ref (quote integer))
+  (ref (quote symbol))
+  (ref (quote cons))
+  (ref (quote string))
+  (ref (quote procedure))
+  (ref (quote unknown))
+  (ref (quote unknown))
+)
+(define type-of (fn (arg)
+  (let1 symbol
+    (deref
+      (peek.d
+        (+ types$
+          (<< (& (type-number-of arg) 0x7) 0x3))))
+    (seq1
+      (ref symbol) ; don't let the reference drop
+      symbol))))
 
 ; Calculate bit mask = (1 << n) - 1
 (define bit-mask
