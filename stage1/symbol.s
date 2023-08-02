@@ -40,6 +40,7 @@ symbol_hash:
         andi t1, t1, 0xff # keep it in range
         or t1, t1, t2 # add the new bit to the end
         addi a1, a1, -1 # decrement counter
+        addi a0, a0, 1 # increment address
         j 1b
 2:
         mv a0, t1
