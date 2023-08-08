@@ -77,6 +77,66 @@ put_hex:
         addi sp, sp, 24
         ret
 
+.section .rodata
+
+# a 64-bit signed integer can have 18 decimal digits
+.align 8
+PUT_DEC_DIVISOR: .quad (1000000000000000000)
+
+.text
+
+# Put signed number in a0 as decimal
+.global put_dec
+put_dec:
+        addi sp, sp, -0x20
+        sd ra, 0x00(sp)
+        sd s1, 0x08(sp) # s1: current number value
+        sd s2, 0x10(sp) # s2: current divisor
+        sd s3, 0x18(sp) # s3: first digit found?
+        mv s1, a0
+        ld s2, (PUT_DEC_DIVISOR)
+        li s3, 0
+        # check sign
+        srli t0, s1, 63
+        bnez t0, 1f
+        j .Lput_dec_loop
+1:
+        # put sign and negate
+        li a0, '-'
+        call putc
+        sub s1, zero, s1
+.Lput_dec_loop:
+        beqz s2, .Lput_dec_end # end if divisor is zero
+        # div/rem divisor
+        div t0, s1, s2 # digit = number / divisor
+        rem s1, s1, s2 # number %= divisor
+        li t1, 10
+        div s2, s2, t1 # divisor /= 10
+        # check if digit is zero and first digit not found
+        or t1, t0, s3
+        beqz t1, .Lput_dec_loop
+        # digit found for sure, set s3
+        li s3, 1
+        # convert to char and putc
+        addi a0, t0, '0'
+        call putc
+        j .Lput_dec_loop
+.Lput_dec_end:
+        # add a zero if digit not found
+        beqz s3, 1f
+        j 2f
+1:
+        # digit not found, so this number is zero
+        li a0, '0'
+        call putc
+2:
+        ld ra, 0x00(sp)
+        ld s1, 0x08(sp)
+        ld s2, 0x10(sp)
+        ld s3, 0x18(sp)
+        addi sp, sp, 0x20
+        ret
+
 # Puts line from console in buffer a0, size a1. Returns length of final string
 .global get_line
 get_line:

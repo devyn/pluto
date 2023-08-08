@@ -54,42 +54,42 @@
 ; some math, until we define the proper operator procs later
 
 ; addition, a0 + a1
-(define +$ (allocate 0x8 0x4))
+(define +$ (allocate 8 4))
 (poke.w +$
   0x00b50533 ; add a0, a0, a1
   0x00008067 ; ret
 )
 
 ; left shift, a0 << a1
-(define <<$ (allocate 0x8 0x4))
+(define <<$ (allocate 8 4))
 (poke.w <<$
   0x00b51533 ; sll a0, a0, a1
   0x00008067 ; ret
 )
 
 ; right arithmetic (sign extend) shift, a0 >> a1
-(define >>$ (allocate 0x8 0x4))
+(define >>$ (allocate 8 4))
 (poke.w >>$
   0x40b55533 ; sra a0, a0, a1
   0x00008067 ; ret
 )
 
 ; logical and, a0 & a1
-(define &$ (allocate 0x8 0x4))
+(define &$ (allocate 8 4))
 (poke.w &$
   0x00b57533 ; and a0, a0, a1
   0x00008067 ; ret
 )
 
 ; logical or, a0 | a1
-(define |$ (allocate 0x8 0x4))
+(define |$ (allocate 8 4))
 (poke.w |$
   0x00b56533 ; or a0, a0, a1
   0x00008067 ; ret
 )
 
 ; logical xor, a0 ^ a1
-(define ^$ (allocate 0x8 0x4))
+(define ^$ (allocate 8 4))
 (poke.w ^$
   0x00b54533 ; xor a0, a0, a1
   0x00008067 ; ret
@@ -122,7 +122,7 @@
 
 ; (swap-if <bool> <a> <b>)
 ; Returns (<a> <b>) if bool = 0 (false), or (<b> <a>) otherwise
-(define swap-if$ (allocate 0x1c 0x4))
+(define swap-if$ (allocate 28 4))
 (poke.w swap-if$
   0x00050863 ; beqz a0, 1f
   0x00058313 ; mv t1, a1
@@ -160,7 +160,7 @@
       (seq1 (deref address) ret-value)))))
 
 ; Returns 1 if the argument is zero
-(define zero?$ (allocate 0x8 0x4))
+(define zero?$ (allocate 8 4))
 (poke.w zero?$
   0x00153513 ; seqz a0, a0
   0x00008067 ; ret
@@ -281,7 +281,7 @@
 (define ^ (fn.native-math ^$))
 
 ; Get type of object as symbol
-(define types$ (allocate 0x40 0x8))
+(define types$ (allocate 0x40 8))
 (poke.d types$
   (ref (quote none))
   (ref (quote integer))
@@ -297,109 +297,109 @@
     (deref
       (peek.d
         (+ types$
-          (<< (& (type-number-of arg) 0x7) 0x3))))
+          (<< (& (type-number-of arg) 7) 3))))
     (seq1
       (ref symbol) ; don't let the reference drop
       symbol))))
 
 ; Calculate bit mask = (1 << n) - 1
 (define bit-mask
-  (fn (bits) (+ (<< 0x1 bits) 0xffffffffffffffff)))
+  (fn (bits) (+ (<< 0x1 bits) -1)))
 
 ; RISC-V instruction formats
-(define rv.opcode-mask (bit-mask 0x7))
-(define rv.reg-mask (bit-mask 0x5))
-(define rv.funct3-mask (bit-mask 0x3))
-(define rv.funct7-mask (bit-mask 0x7))
+(define rv.opcode-mask (bit-mask 7))
+(define rv.reg-mask (bit-mask 5))
+(define rv.funct3-mask (bit-mask 3))
+(define rv.funct7-mask (bit-mask 7))
 (define rv.instr.r
   (fn (opcode funct3 funct7)
     (fn (rd rs1 rs2)
       (| (& opcode rv.opcode-mask)
-        (<< (& rd rv.reg-mask) 0x7)
-        (<< (& funct3 rv.funct3-mask) 0xc)
-        (<< (& rs1 rv.reg-mask) 0xf)
-        (<< (& rs2 rv.reg-mask) 0x14)
-        (<< (& funct7 rv.funct7-mask) 0x19)))))
+        (<< (& rd rv.reg-mask) 7)
+        (<< (& funct3 rv.funct3-mask) 12)
+        (<< (& rs1 rv.reg-mask) 15)
+        (<< (& rs2 rv.reg-mask) 20)
+        (<< (& funct7 rv.funct7-mask) 25)))))
 (define rv.instr.i
   (fn (opcode funct3)
     (fn (rd rs1 imm)
       (| (& opcode rv.opcode-mask)
-        (<< (& rd rv.reg-mask) 0x7)
-        (<< (& funct3 rv.funct3-mask) 0xc)
-        (<< (& rs1 rv.reg-mask) 0xf)
-        (<< (& imm (bit-mask 0xc)) 0x14)))))
+        (<< (& rd rv.reg-mask) 7)
+        (<< (& funct3 rv.funct3-mask) 12)
+        (<< (& rs1 rv.reg-mask) 15)
+        (<< (& imm (bit-mask 12)) 20)))))
 (define rv.instr.s
   (fn (opcode funct3)
     (fn (rs2 imm rs1)
       (| (& opcode rv.opcode-mask)
-        (<< (& imm (bit-mask 0x5)) 0x7)
-        (<< (& funct3 rv.funct3-mask) 0xc)
-        (<< (& rs1 rv.reg-mask) 0xf)
-        (<< (& rs2 rv.reg-mask) 0x14)
-        (<< (& (>> imm 0x5) (bit-mask 0x7)) 0x19)))))
+        (<< (& imm (bit-mask 5)) 7)
+        (<< (& funct3 rv.funct3-mask) 12)
+        (<< (& rs1 rv.reg-mask) 15)
+        (<< (& rs2 rv.reg-mask) 20)
+        (<< (& (>> imm 5) (bit-mask 7)) 25)))))
 (define rv.instr.b
   (fn (opcode funct3)
     (fn (rs1 rs2 imm)
       (| (& opcode rv.opcode-mask)
-        (<< (& (>> imm 0xb) 0x1) 0x7)
-        (<< (& (>> imm 0x1) (bit-mask 0x4)) 0x8)
-        (<< (& funct3 rv.funct3-mask) 0xc)
-        (<< (& rs1 rv.reg-mask) 0xf)
-        (<< (& rs2 rv.reg-mask) 0x14)
-        (<< (& (>> imm 0x5) (bit-mask 0x5)) 0x19)
-        (<< (& (>> imm 0xc) 0x1) 0x1f)))))
+        (<< (& (>> imm 11) 1) 7)
+        (<< (& (>> imm 1) (bit-mask 4)) 8)
+        (<< (& funct3 rv.funct3-mask) 12)
+        (<< (& rs1 rv.reg-mask) 15)
+        (<< (& rs2 rv.reg-mask) 20)
+        (<< (& (>> imm 5) (bit-mask 0x5)) 25)
+        (<< (& (>> imm 12) 1) 31)))))
 (define rv.instr.u
   (fn (opcode)
     (fn (rd imm)
       (| (& opcode rv.opcode-mask)
-        (<< (& rd rv.reg-mask) 0x7)
+        (<< (& rd rv.reg-mask) 7)
         (+ ; add one if 11th bit is set
-          (& imm (<< (bit-mask 0x14) 0xc))
-          (<< (& imm 0x800) 0x1))))))
+          (& imm (<< (bit-mask 20) 12))
+          (<< (& imm 0x800) 1))))))
 (define rv.instr.j
   (fn (opcode)
     (fn (rd imm)
       (| (& opcode rv.opcode-mask)
-        (<< (& rd rv.reg-mask) 0x7)
-        (& imm (<< (bit-mask 0x8) 0xc))           ; inst[19:12] = imm[19:12]
-        (<< (& (>> imm 0xb) 0x1) 0x14)            ; inst[20]    = imm[11]
-        (<< (& (>> imm 0x1) (bit-mask 0xa)) 0x15) ; inst[30:21] = imm[10:1]
-        (<< (& (>> imm 0x14) 0x1) 0x1f)))))       ; inst[31]    = imm[20]
+        (<< (& rd rv.reg-mask) 7)
+        (& imm (<< (bit-mask 8) 12))         ; inst[19:12] = imm[19:12]
+        (<< (& (>> imm 11) 1) 20)            ; inst[20]    = imm[11]
+        (<< (& (>> imm 1) (bit-mask 10)) 21) ; inst[30:21] = imm[10:1]
+        (<< (& (>> imm 20) 1) 31)))))        ; inst[31]    = imm[20]
 
 ; RISC-V registers
-(define $zero 0x0)
-(define $ra 0x1)
-(define $sp 0x2)
-(define $gp 0x3)
-(define $tp 0x4)
-(define $t0 0x5)
-(define $t1 0x6)
-(define $t2 0x7)
-(define $s0 0x8)
-(define $fp 0x8)
-(define $s1 0x9)
-(define $a0 0xa)
-(define $a1 0xb)
-(define $a2 0xc)
-(define $a3 0xd)
-(define $a4 0xe)
-(define $a5 0xf)
-(define $a6 0x10)
-(define $a7 0x11)
-(define $s2 0x12)
-(define $s3 0x13)
-(define $s4 0x14)
-(define $s5 0x15)
-(define $s6 0x16)
-(define $s7 0x17)
-(define $s8 0x18)
-(define $s9 0x19)
-(define $s10 0x1a)
-(define $s11 0x1b)
-(define $t3 0x1c)
-(define $t4 0x1d)
-(define $t5 0x1e)
-(define $t6 0x1f)
+(define $zero 0)
+(define $ra 1)
+(define $sp 2)
+(define $gp 3)
+(define $tp 4)
+(define $t0 5)
+(define $t1 6)
+(define $t2 7)
+(define $s0 8)
+(define $fp 8)
+(define $s1 9)
+(define $a0 10)
+(define $a1 11)
+(define $a2 12)
+(define $a3 13)
+(define $a4 14)
+(define $a5 15)
+(define $a6 16)
+(define $a7 17)
+(define $s2 18)
+(define $s3 19)
+(define $s4 20)
+(define $s5 21)
+(define $s6 22)
+(define $s7 23)
+(define $s8 24)
+(define $s9 25)
+(define $s10 26)
+(define $s11 27)
+(define $t3 28)
+(define $t4 29)
+(define $t5 30)
+(define $t6 31)
 
 ; RV32I instructions
 (define \lui   (rv.instr.u 0x37))

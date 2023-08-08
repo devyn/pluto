@@ -284,11 +284,9 @@ print_obj:
         call putc
         j .Lprint_obj_ret
 .Lprint_obj_integer:
-        # todo: print variable width, probably usually decimal
-        jal t0, .Lprint_obj_zero_x
+        # TODO: it would be nice to flag integers that should be presented as hex?
         ld a0, LISP_INTEGER_VALUE(s1)
-        li a1, 16
-        call put_hex
+        call put_dec
         j .Lprint_obj_ret
 .Lprint_obj_symbol:
         # just print the string

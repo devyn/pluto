@@ -48,6 +48,8 @@ get_token:
         li t1, 0x22 # double quote (")
         beq t0, t1, .Lget_token_string
         # integer (but not sure which type)
+        li t1, '-'
+        beq t0, t1, .Lget_token_integer
         li t1, '0'
         bltu t0, t1, 1f # ch < '0'
         li t1, '9'
@@ -155,11 +157,9 @@ get_token:
 4:
         ret
 .Lget_token_integer:
-        li a2, TOKEN_INTEGER_DECIMAL
         # detect 0x = hex, otherwise decimal
-        li t4, 0 # t4 = 0 (decimal), 1 (hex)
-        li t0, 1
-        bleu a1, t0, .Lget_token_integer_decimal # can't lookahead = decimal for sure
+        li t0, 2
+        bltu a1, t0, .Lget_token_integer_decimal # can't lookahead = decimal for sure
         lb t0, 0(a0)
         li t1, '0'
         bne t0, t1, .Lget_token_integer_decimal
@@ -167,15 +167,24 @@ get_token:
         li t1, 'x'
         bne t0, t1, .Lget_token_integer_decimal
 .Lget_token_integer_hex:
+        li a2, TOKEN_INTEGER_HEX
         li t4, 1
         # always keep two chars
         addi a0, a0, 2
         addi a4, a4, 2
         addi a1, a1, -2
+        j .Lget_token_integer_loop
 .Lget_token_integer_decimal:
-        # change to hex if flag set (TOKEN_INTEGER_DECIMAL + 1 = TOKEN_INTEGER_HEX)
-        add a2, a2, t4
-        # look for digits in range
+        li a2, TOKEN_INTEGER_DECIMAL
+        li t4, 0
+        # check for negative sign
+        lb t0, (a0)
+        li t1, '-'
+        bne t0, t1, .Lget_token_integer_loop
+        # consume negative sign
+        addi a0, a0, 1
+        addi a4, a4, 1
+        addi a1, a1, -1
 .Lget_token_integer_loop:
         beqz a1, .Lget_token_integer_end # eof
         lb t0, (a0)
@@ -301,7 +310,16 @@ parse_token:
         beqz s6, .Lparse_token_error # allocation failed, or intern symbol internal error
         j .Lparse_token_place_object
 .Lparse_token_decimal:
-        j .Lparse_token_error # WIP
+        # convert the token to an integer
+        mv a0, s4
+        mv a1, s5
+        call dec_str_to_int
+        # box the integer
+        call box_integer
+        beqz a0, .Lparse_token_error # allocation failed
+        mv s6, a0
+        # place it
+        j .Lparse_token_place_object
 .Lparse_token_hex:
         # convert the token to an integer
         mv a0, s4
