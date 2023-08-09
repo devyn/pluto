@@ -146,6 +146,18 @@ INITIAL_WORDS:
         .ascii "deallocate$"
         .balign 8
 
+        .quad acquire_object
+        .2byte 15
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "acquire-object$"
+        .balign 8
+
+        .quad release_object
+        .2byte 15
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "release-object$"
+        .balign 8
+
         .quad define
         .2byte 7
         .byte LISP_OBJECT_TYPE_INTEGER
@@ -188,6 +200,12 @@ INITIAL_WORDS:
         .ascii "put-hex$"
         .balign 8
 
+        .quad put_dec
+        .2byte 8
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "put-dec$"
+        .balign 8
+
         .quad getc
         .2byte 5
         .byte LISP_OBJECT_TYPE_INTEGER
@@ -206,7 +224,7 @@ INITIAL_WORDS:
         .ascii "print-obj$"
         .balign 8
 
-.set INITIAL_WORDS_LEN, 29
+.set INITIAL_WORDS_LEN, 32
 
 .text
 
