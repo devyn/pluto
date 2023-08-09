@@ -59,6 +59,16 @@ box_integer:
         li a0, LISP_OBJECT_TYPE_INTEGER
         j make_obj
 
+# make string from buf (a0), len (a1)
+# object takes ownership of the buf and will deallocate it on drop
+.global box_string
+box_string:
+        mv a3, zero
+        mv a2, a1
+        mv a1, a0
+        li a0, LISP_OBJECT_TYPE_STRING
+        j make_obj
+
 # Return only head from cons in a0
 # Takes ownership of reference, so make sure to acquire first if you don't want to lose the cons
 # Returns nil if not cons
@@ -245,6 +255,8 @@ print_obj:
         beq t0, t1, .Lprint_obj_integer
         li t1, LISP_OBJECT_TYPE_SYMBOL
         beq t0, t1, .Lprint_obj_symbol
+        li t1, LISP_OBJECT_TYPE_STRING
+        beq t0, t1, .Lprint_obj_string
         li t1, LISP_OBJECT_TYPE_PROCEDURE
         beq t0, t1, .Lprint_obj_procedure
         # print <??> if unrecognized
@@ -293,6 +305,36 @@ print_obj:
         ld a0, LISP_SYMBOL_BUF(s1)
         ld a1, LISP_SYMBOL_LEN(s1)
         call put_buf
+        j .Lprint_obj_ret
+.Lprint_obj_string:
+        # get string buf, len
+        addi sp, sp, -0x10
+        sd s2, 0x00(sp)
+        sd s3, 0x08(sp)
+        ld s2, LISP_STRING_BUF(s1)
+        ld s3, LISP_STRING_LEN(s1)
+        # put quote
+        li a0, 0x22
+        call putc
+        # loop through chars, print double quote if quote
+1:
+        beqz s3, 2f
+        lb a0, (s2)
+        call putc
+        lb a0, (s2)
+        li t0, 0x22
+        addi s2, s2, 1
+        addi s3, s3, -1
+        bne a0, t0, 1b # not a quote
+        call putc # print extra quote
+        j 1b
+2:
+        # closing quote
+        li a0, 0x22
+        call putc
+        ld s2, 0x00(sp)
+        ld s3, 0x08(sp)
+        addi sp, sp, 0x10
         j .Lprint_obj_ret
 .Lprint_obj_procedure:
         # print <address data>

@@ -116,10 +116,28 @@ INITIAL_WORDS:
         .ascii "car"
         .balign 8
 
+        .quad car
+        .2byte 4
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "car$"
+        .balign 8
+
         .quad proc_cdr
         .2byte 3
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "cdr"
+        .balign 8
+
+        .quad cdr
+        .2byte 4
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "cdr$"
+        .balign 8
+
+        .quad uncons
+        .2byte 7
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "uncons$"
         .balign 8
 
         .quad proc_proc
@@ -132,6 +150,12 @@ INITIAL_WORDS:
         .2byte 4
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "eval"
+        .balign 8
+
+        .quad eval
+        .2byte 5
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "eval$"
         .balign 8
 
         .quad allocate

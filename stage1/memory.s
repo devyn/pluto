@@ -240,7 +240,7 @@ acquire_object:
 1:
         ret
 
-# decrement refcount and deallocate if <= 0
+# decrement refcount and drop if <= 0
 .global release_object
 release_object:
         beqz a0, 1f
@@ -248,58 +248,58 @@ release_object:
         addi t0, t0, -1
         sw t0, LISP_OBJECT_REFCOUNT(a0)
         bgtz t0, 1f
-        j deallocate_object
+        j drop_object
 1:
         mv a0, zero
         ret
 
 # calls deallocate for an object as well as any of the memory it owns
-.global deallocate_object
-deallocate_object:
+.global drop_object
+drop_object:
         addi sp, sp, -24
         sd ra, 0(sp)
         sd s1, 8(sp) # s1 = saved object address
         sd s2, 16(sp) # s2 = object type
         mv s1, a0
         lwu s2, LISP_OBJECT_TYPE(s1)
-        beqz s2, .Ldeallocate_object_zero # most likely double free
-.Ldeallocate_object_cons:
+        beqz s2, .Ldrop_object_zero # most likely double free
+.Ldrop_object_cons:
         # check for CONS
         li t0, LISP_OBJECT_TYPE_CONS
-        bne s2, t0, .Ldeallocate_object_string
+        bne s2, t0, .Ldrop_object_string
         # release head
         ld a0, LISP_CONS_HEAD(s1)
         call release_object
         # release tail
         ld a0, LISP_CONS_TAIL(s1)
         call release_object
-        j .Ldeallocate_object_end
-.Ldeallocate_object_string:
+        j .Ldrop_object_end
+.Ldrop_object_string:
         # check for STRING
         li t0, LISP_OBJECT_TYPE_STRING
-        bne s2, t0, .Ldeallocate_object_procedure
+        bne s2, t0, .Ldrop_object_procedure
         # release the buffer x capacity
         ld a0, LISP_STRING_BUF(s1)
         ld a1, LISP_STRING_CAP(s1)
         call deallocate
-        j .Ldeallocate_object_end
-.Ldeallocate_object_procedure:
+        j .Ldrop_object_end
+.Ldrop_object_procedure:
         # check for PROCEDURE
         li t0, LISP_OBJECT_TYPE_PROCEDURE
-        bne s2, t0, .Ldeallocate_object_end
+        bne s2, t0, .Ldrop_object_end
         # release data
         ld a0, LISP_PROCEDURE_DATA(s1)
         call release_object
-        j .Ldeallocate_object_end
-.Ldeallocate_object_symbol:
+        j .Ldrop_object_end
+.Ldrop_object_symbol:
         # check for SYMBOL
         li t0, LISP_OBJECT_TYPE_SYMBOL
-        bne s2, t0, .Ldeallocate_object_end
+        bne s2, t0, .Ldrop_object_end
         # symbols should never be released
         mv a0, s1
         call acquire_object
         j 1f
-.Ldeallocate_object_zero:
+.Ldrop_object_zero:
         # print z address and return without deallocating
         li a0, 'z'
         call putc
@@ -309,7 +309,7 @@ deallocate_object:
         li a0, '\n'
         call putc
         j 1f
-.Ldeallocate_object_end:
+.Ldrop_object_end:
         mv a0, s1
         li a1, LISP_OBJECT_SIZE
         call deallocate

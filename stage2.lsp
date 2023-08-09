@@ -188,7 +188,7 @@
 ; Returns 1 if two objects have the same address
 (define ref-eq? (proc args scope
   (let1 a (ref (eval scope (car args)))
-    (let1 b (ref (eval scope (car args)))
+    (let1 b (ref (eval scope (cadr args)))
       (cleanup a
         (cleanup b
           (number-eq? a b)))))))
@@ -215,20 +215,19 @@
       (eval (eval scope (car args)) (cons map (eval scope (cadr args)))))))
 
 ; associate two lists into pairs
+; if the second list is shorter than the first, remaining pairs will be associated to nil
 (define assoc
   (let-recursive map
     (proc args ()
       (if (nil? (car args))
         ()
-        (if (nil? (cadr args))
-          ()
+        (cons
           (cons
-            (cons
-              (car (car args))
-              (car (cadr args)))
-            (unquote (cons map
-              (cons (cdr (car args))
-                (cons (cdr (cadr args))))))))))
+            (car (car args))
+            (car (cadr args)))
+          (unquote (cons map
+            (cons (cdr (car args))
+              (cons (cdr (cadr args)))))))))
     ; pass evaluated first and second arg to `map`
     (proc args scope
       (unquote (cons map
@@ -257,6 +256,13 @@
     (eval
       (concat (assoc (car def-args) (eval-list scope args)) def-scope)
       (cadr def-args)))))
+
+; print hex number, plain
+(define put-hex (fn (number digits)
+  (seq1
+    (call-native put-hex$ number
+      (if (nil? digits) 16 digits))
+    number)))
 
 ; Get type number of object
 (define type-number-of (fn (arg)
@@ -473,7 +479,12 @@
 (define \sraw  (rv.instr.r 0x3b 0x5 0x20))
 
 ; single-instruction pseudo instructions
-(define \ret (fn () (\jalr $zero $ra 0)))
+(define \li    (fn (reg value)  (\addi  reg $zero value)))
+(define \mv    (fn (dest src)   (\addi  dest src 0)))
+(define \j     (fn (offset)     (\jal   $zero offset)))
+(define \jr    (fn (reg offset) (\jalr  $zero reg offset)))
+(define \callr (fn (reg offset) (\jalr  $ra reg offset)))
+(define \ret   (fn ()           (\jalr  $zero $ra 0)))
 
 ; functional left fold
 (define left-fold (fn (f val list)
@@ -546,7 +557,7 @@
 
 ; link a program
 ; expects multiple named sections with instructions following the name
-; symbols defined in context: pc, rel, all sections
+; symbols defined in context: pc, rel, rel+, all sections
 ; returns the address and size of the program
 (define link (proc program scope
   (let
@@ -554,13 +565,20 @@
       (program-size (link.program-size program))
       (program-addr (allocate program-size 4))
       (section-addrs (link.section-addrs program-addr program))
+      (rel (proc args scope
+        ; [0] - pc
+        (-
+          (eval scope (car args))
+          (eval scope (quote pc)))))
+      ; offset by one instruction
+      (rel+ (proc args scope
+        (+ 4 (eval scope (cons rel args)))))
       (program-scope
-        (cons
-          (cons (quote rel) (proc args scope
-            ; [0] - pc
-            (-
-              (eval scope (car args))
-              (eval scope (quote pc)))))
+        (concat
+          ; define rel and rel+
+          (assoc
+            (quote (rel rel+))
+            (cons rel (cons rel+ ())))
           (concat section-addrs scope)))
       (put-instruction
         (fn (pc instruction-expr)
@@ -583,27 +601,30 @@
       (cons program-addr (cons program-size ()))))))
 
 ; try a simple assembler program
-(define awesome.str$ (allocate 0x8 0x1))
-(poke.b awesome.str$
-  0x61 0x77 0x65 0x73 0x6f 0x6d 0x65 0x0a
-)
+(define awesome.str$ (ref "Awesome string!"))
 (define awesome$ (car (link
   (start
     ; initialize counter, stack
     (\addi  $sp $sp -0x10)
     (\sd    $ra $sp 0x00)
     (\sd    $s0 $sp 0x08)
-    (\addi  $s0 $zero 5)
+    (\li    $s0 5)
   )
   (loop
-    ; load address of awesome.str$ to a0
-    (\auipc $a0 (rel awesome.str$))
-    (\addi  $a0 $a0 (+ (rel awesome.str$) 4))
-    ; set length = 8
-    (\addi  $a1 $zero 8)
+    ; load address of awesome.str$ to t0
+    (\auipc $t0 (rel awesome.str$))
+    (\addi  $t0 $t0 (+ (rel awesome.str$) 4))
+    ; load string buf to a0
+    (\ld    $a0 $t0 0x08)
+    ; load string len to a1
+    (\ld    $a1 $t0 0x10)
     ; load address of put-buf and call it
-    (\auipc $t0 (rel put-buf$))
-    (\jalr  $ra $t0 (+ (rel put-buf$) 4))
+    (\auipc $t0 (rel  put-buf$))
+    (\callr $t0 (rel+ put-buf$))
+    ; print newline
+    (\li    $a0 10)
+    (\auipc $t0 (rel  putc$))
+    (\callr $t0 (rel+ putc$))
     ; decrement counter
     (\addi  $s0 $s0 -1)
     ; if not zero jump back to loop
@@ -618,3 +639,63 @@
   )
 )))
 (call-native awesome$)
+
+; create procedure from raw address, data object
+(define box-procedure
+  (fn (address data)
+    (deref (poke.d
+      (allocate 0x20 0x8)
+      0x100000005 ; type = procedure, refcount = 1
+      address
+      (ref data)))))
+
+; define (error), returns exception
+; we don't evaluate the args in the asm because it's easy to do that with eval-list
+(define error: (box-procedure (car (link
+  (start
+    ; preserve a0
+    (\addi  $sp $sp -0x10)
+    (\sd    $ra $sp 0x00)
+    (\sd    $a0 $sp 0x08)
+    ; free locals (a1)
+    (\mv    $a0 $a1)
+    (\auipc $ra (rel  release-object$))
+    (\callr $ra (rel+ release-object$))
+    ; set a0 = EVAL_ERROR_EXCEPTION (-1)
+    (\li    $a0 -1)
+    ; load a1 = args
+    (\ld    $a1 $sp 0x08)
+  )
+  (end
+    (\ld    $ra $sp 0x00)
+    (\addi  $sp $sp 0x10)
+    (\ret)
+  )
+))))
+(define error (proc args scope
+  (eval scope
+    (cons error:
+      (eval-list scope args)))))
+
+; print string
+(define put-str (fn (string)
+  (if (symbol-eq? (type-of string) (quote string))
+    (let1 address (ref string)
+      (seq1
+        (call-native put-buf$
+          (peek.d (+ address 0x08))
+          (peek.d (+ address 0x10)))
+        (deref address)))
+    (error (quote not-a-string:) string))))
+
+; put char
+(define putc (fn (char) (seq1 (call-native putc$ char) char)))
+
+; print hex nicely
+(define print-hex
+  (fn (number)
+    (seq
+      (put-str "0x")
+      (put-hex number)
+      (putc 10)
+      number)))

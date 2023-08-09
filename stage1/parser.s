@@ -409,7 +409,59 @@ parse_token:
         sd t1, PARSER_STATE_E_FLAG(s2) # set assoc
         j .Lparse_token_ret_ok
 .Lparse_token_string:
-        j .Lparse_token_error # WIP
+        # determine true length of the string
+        li t1, 2
+        bltu s5, t1, .Lparse_token_error # string must have at least two chars: ""
+        addi t0, s4, 1  # current addr (skip first ")
+        addi t1, s5, -1 # remaining length counter (skip first ")
+        li t2, 0        # actual length
+        li t4, 0x22     # 0x22 = "
+.Lparse_token_string_length_loop:
+        beqz t1, .Lparse_token_error # shouldn't run out of token
+        lb t3, (t0)
+        addi t0, t0, 1
+        addi t1, t1, -1
+        addi t2, t2, 1
+        bne t3, t4, .Lparse_token_string_length_loop # not a quote
+        # check if the quote is followed by a quote (escape)
+        beqz t1, .Lparse_token_string_length_end # end of string
+        lb t3, (t0)
+        # error condition: token contains non-escaped quote in non-terminal position
+        bne t3, t4, .Lparse_token_error
+        # skip the second quote
+        addi t0, t0, 1
+        addi t1, t1, -1
+        j .Lparse_token_string_length_loop
+.Lparse_token_string_length_end:
+        # allocate string buffer, keep length in s7 for now
+        addi s7, t2, -1 # the last quote is always over-counted, remove it
+        mv a0, s7
+        li a1, 1 # byte alignment
+        call allocate
+        beqz a0, .Lparse_token_error # alloc failed
+        # turn the buffer into an object
+        mv a1, s7
+        call box_string
+        beqz a0, .Lparse_token_error # alloc failed
+        # save the object into s6
+        mv s6, a0
+        # set up the loop to copy the string contents, handling escapes
+        addi t0, s4, 1             # current src addr (skip first ")
+        ld t1, LISP_STRING_BUF(s6) # current dest addr
+        ld t2, LISP_STRING_LEN(s6) # remaining length counter
+        li t4, 0x22                # 0x22 = "
+.Lparse_token_string_copy_loop:
+        beqz t2, .Lparse_token_place_object # end of string
+        lb t3, (t0)
+        sb t3, (t1)
+        addi t0, t0, 1
+        addi t1, t1, 1
+        addi t2, t2, -1
+        # skip a char from the src if this is a quote
+        # we already validated that every quote inside the string is doubled
+        bne t3, t4, .Lparse_token_string_copy_loop # not a quote
+        addi t0, t0, 1
+        j .Lparse_token_string_copy_loop
 .Lparse_token_address:
         j .Lparse_token_error # WIP
 .Lparse_token_place_object:

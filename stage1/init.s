@@ -58,8 +58,8 @@ start:
         # loop through tokens and print them
         call get_token
         # make sure token is valid
-        beqz a0, .Lstart_parse_done
-        beqz a2, .Lstart_parse_done
+        beqz a0, .Lstart_token_error
+        beqz a2, .Lstart_token_error
         # save the remaining buffer
         mv s3, a0
         mv s4, a1
@@ -71,6 +71,7 @@ start:
         # some kind of error
         li t0, PARSER_STATUS_OVERFLOW
         beq a0, t0, .Lstart_token_overflow
+.Lstart_token_error:
         la a0, ERR_MSG
         ld a1, (ERR_MSG_LENGTH)
         call put_buf
