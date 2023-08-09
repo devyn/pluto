@@ -157,6 +157,24 @@ get_token:
 4:
         ret
 .Lget_token_integer:
+        # check for negative sign
+        lb t0, (a0)
+        li t1, '-'
+        bne t0, t1, 1f
+        # if it's a negative sign then make sure we have some digits
+        # if we don't, valid symbols can start with a hyphen so do that
+        li t1, 2
+        bltu a1, t1, .Lget_token_symbol # EOF
+        lb t0, 1(a0)
+        li t1, '0'
+        bltu t0, t1, .Lget_token_symbol # < '0'
+        li t1, '9'
+        bgtu t0, t1, .Lget_token_symbol # > '9'
+        # consume negative sign
+        addi a0, a0, 1
+        addi a4, a4, 1
+        addi a1, a1, -1
+1:
         # detect 0x = hex, otherwise decimal
         li t0, 2
         bltu a1, t0, .Lget_token_integer_decimal # can't lookahead = decimal for sure
@@ -177,23 +195,6 @@ get_token:
 .Lget_token_integer_decimal:
         li a2, TOKEN_INTEGER_DECIMAL
         li t4, 0
-        # check for negative sign
-        lb t0, (a0)
-        li t1, '-'
-        bne t0, t1, .Lget_token_integer_loop
-        # if it's a negative sign then make sure we have some digits
-        # if we don't, single hyphen is a valid symbol so do that
-        li t1, 2
-        bltu a1, t1, .Lget_token_symbol # EOF
-        lb t0, 1(a0)
-        li t1, '0'
-        bltu t0, t1, .Lget_token_symbol # < '0'
-        li t1, '9'
-        bgtu t0, t1, .Lget_token_symbol # > '9'
-        # consume negative sign
-        addi a0, a0, 1
-        addi a4, a4, 1
-        addi a1, a1, -1
 .Lget_token_integer_loop:
         beqz a1, .Lget_token_integer_end # eof
         lb t0, (a0)
@@ -272,7 +273,7 @@ get_token:
 .global parse_token
 parse_token:
         # free up some saved registers for our use
-        addi sp, sp, -7*8
+        addi sp, sp, -8*8
         sd ra, 0x00(sp)
         sd s1, 0x08(sp) # a0 = parser state array
         sd s2, 0x10(sp) # current state pointer
@@ -280,6 +281,7 @@ parse_token:
         sd s4, 0x20(sp) # a3 = token slice ptr
         sd s5, 0x28(sp) # a4 = token slice length
         sd s6, 0x30(sp) # produced object for placement
+        sd s7, 0x38(sp) # preserved temporary
         # save all of the arguments so that we can call other procedures
         mv s1, a0
         mv s3, a2
@@ -333,12 +335,25 @@ parse_token:
         # convert the token to an integer
         mv a0, s4
         mv a1, s5
+        # check for initial minus sign
+        beqz a1, .Lparse_token_error # zero length
+        lb t0, (a0)
+        li t1, '-'
+        li s7, 1 # positive sign
+        bne t0, t1, 1f
+        li s7, -1 # negative sign
+        # skip over minus sign
+        addi a0, a0, 1
+        addi a1, a1, -1
+1:
         li t1, 2
         bleu a1, t1, .Lparse_token_error # token too small, should be at least 3 (0x?)
         # skip the 0x
         addi a0, a0, 2
         addi a1, a1, -2
         call hex_str_to_int
+        # multiply by sign
+        mul a0, a0, s7
         # box the integer
         call box_integer
         beqz a0, .Lparse_token_error # allocation failed
@@ -469,7 +484,7 @@ parse_token:
         ld s4, 0x20(sp)
         ld s5, 0x28(sp)
         ld s6, 0x30(sp)
-        addi sp, sp, 7*8
+        addi sp, sp, 8*8
         ret
 # utility subprocs
 .Lparse_token_get_state_pointer_s2: # clobbers t1, returns to t0

@@ -590,7 +590,7 @@
 (define awesome$ (car (link
   (start
     ; initialize counter, stack
-    (\addi  $sp $sp (- 0 0x10)) ; negative hex would be nice
+    (\addi  $sp $sp -0x10)
     (\sd    $ra $sp 0x00)
     (\sd    $s0 $sp 0x08)
     (\addi  $s0 $zero 5)
