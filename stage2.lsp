@@ -42,12 +42,11 @@
     (eval scope (car args))
     (eval scope (cadr args))))))
 
-; (print <object>)
+; (print <object>) = <object>
 (define print (proc args scope
-  (seq1
+  (deref (car
     (call-native print-obj$
-      (ref (eval scope (car args))))
-    ())))
+      (ref (eval scope (car args))))))))
 
 ; create native machine instructions for critical math operations
 ; these are not nice to use as they are but it allows us to at least do
@@ -57,6 +56,13 @@
 (define +$ (allocate 8 4))
 (poke.w +$
   0x00b50533 ; add a0, a0, a1
+  0x00008067 ; ret
+)
+
+; subtraction, a0 - a1
+(define -$ (allocate 8 4))
+(poke.w -$
+  0x40b50533 ; sub a0, a0, a1
   0x00008067 ; ret
 )
 
@@ -190,6 +196,14 @@
 ; Symbol equality is same as ref equality
 (define symbol-eq? ref-eq?)
 
+; seq multiple
+(define seq (proc args scope
+  (if (nil? (cdr args))
+    (eval scope (car args))
+    (seq1
+      (eval scope (car args))
+      (eval scope (cons seq (cdr args)))))))
+
 ; evaluate all elements of a list
 (define eval-list
   (let-recursive map
@@ -274,6 +288,7 @@
 
 ; define nicer versions of the core math ops we put into memory earlier
 (define + (fn.native-math +$))
+(define - (fn.native-math -$))
 (define << (fn.native-math <<$))
 (define >> (fn.native-math >>$))
 (define & (fn.native-math &$))
@@ -330,7 +345,7 @@
         (<< (& imm (bit-mask 12)) 20)))))
 (define rv.instr.s
   (fn (opcode funct3)
-    (fn (rs2 imm rs1)
+    (fn (rs2 rs1 imm)
       (| (& opcode rv.opcode-mask)
         (<< (& imm (bit-mask 5)) 7)
         (<< (& funct3 rv.funct3-mask) 12)
@@ -346,7 +361,7 @@
         (<< (& funct3 rv.funct3-mask) 12)
         (<< (& rs1 rv.reg-mask) 15)
         (<< (& rs2 rv.reg-mask) 20)
-        (<< (& (>> imm 5) (bit-mask 0x5)) 25)
+        (<< (& (>> imm 5) (bit-mask 6)) 25)
         (<< (& (>> imm 12) 1) 31)))))
 (define rv.instr.u
   (fn (opcode)
@@ -440,8 +455,8 @@
 (define \or    (rv.instr.r 0x33 0x6 0x0))
 (define \and   (rv.instr.r 0x33 0x7 0x0))
 ; fence is complicated, leaving it out for now
-(define \ecall  0x73)
-(define \ebreak 0x100073)
+(define \ecall  (fn () 0x73))
+(define \ebreak (fn () 0x100073))
 
 ; RV64I instructions
 (define \lwu   (rv.instr.i 0x3 0x6))
@@ -457,26 +472,149 @@
 (define \srlw  (rv.instr.r 0x3b 0x5 0x0))
 (define \sraw  (rv.instr.r 0x3b 0x5 0x20))
 
+; single-instruction pseudo instructions
+(define \ret (fn () (\jalr $zero $ra 0)))
+
+; functional left fold
+(define left-fold (fn (f val list)
+  (if (nil? list) val
+    (left-fold f (f val (car list)) (cdr list)))))
+
+; functional map list
+(define map (fn (f list)
+  (left-fold
+    (fn (out-list val)
+      (concat out-list (cons (f val) ())))
+    ()
+    list)))
+
+; increment number by one
+(define increment (fn (val) (+ 1 val)))
+
+; length of a list
+(define length (fn (list)
+  (left-fold increment 0 list)))
+
+; let multiple
+; e.g. (let ((foo 1) (bar 2)) (+ foo bar))
+(define let (proc args scope
+  (if (nil? (car args))
+    (eval scope (cadr args))
+    (eval
+      (cons
+        ; evaluate and define the first variable pair
+        (let1 pair (car (car args))
+          (cons 
+            (car pair)
+            (eval scope (cadr pair))))
+        scope)
+      ; process the rest of the list by recursive call to let
+      (cons let
+        (cons
+          (cdr (car args)) ; the rest of the definition list
+          (cdr args))))))) ; the rest of let's args untouched (incl. expression)
+
+; Linker
+
+; size of a section after linking
+(define link.section-size (fn (section)
+  (<< (length section) 2))) ; 4 bytes per instruction (we don't support RV-C)
+
+; size of a program after linking
+(define link.program-size
+  (let1
+    accumulate (fn (acc named-section)
+      (+ acc (link.section-size (cdr named-section))))
+    (fn (program)
+      (left-fold accumulate 0 program))))
+
+; place sections relative to start offset
+(define link.section-addrs
+  (let1
+    accumulate (fn (acc named-section)
+      ; acc = (offset (s1 . addr) (s2 . addr) ... (sN . addr))
+      (let1
+        size (link.section-size (cdr named-section))
+        (cons
+          (+ (car acc) size) ; next offset
+          ; define: (section-name . offset)
+          (cons
+            (cons (car named-section) (car acc))
+            (cdr acc)))))
+    (fn (start program)
+      (cdr (left-fold accumulate (cons start ()) program)))))
+
+; link a program
+; expects multiple named sections with instructions following the name
+; symbols defined in context: pc, rel, all sections
+; returns the address and size of the program
+(define link (proc program scope
+  (let
+    (
+      (program-size (link.program-size program))
+      (program-addr (allocate program-size 4))
+      (section-addrs (link.section-addrs program-addr program))
+      (program-scope
+        (cons
+          (cons (quote rel) (proc args scope
+            ; [0] - pc
+            (-
+              (eval scope (car args))
+              (eval scope (quote pc)))))
+          (concat section-addrs scope)))
+      (put-instruction
+        (fn (pc instruction-expr)
+          (+ 4 ; next pc
+            (poke.w pc ; put instruction in memory
+              (eval
+                (cons (cons (quote pc) pc) program-scope) ; define pc in eval scope
+                instruction-expr)))))
+    )
+    (seq
+      (left-fold
+        ; put the instructions inside each named section, skipping over the name,
+        ; and keeping a program counter around to increment
+        (fn (pc named-section)
+          (left-fold put-instruction pc (cdr named-section)))
+        program-addr ; start pc = base addr
+        program)
+      ; the output of the above should be the end address of the program,
+      ; but we want to return (addr size)
+      (cons program-addr (cons program-size ()))))))
+
 ; try a simple assembler program
 (define awesome.str$ (allocate 0x8 0x1))
 (poke.b awesome.str$
   0x61 0x77 0x65 0x73 0x6f 0x6d 0x65 0x0a
 )
-(define awesome$ (allocate 0x28 0x8))
-(poke.w awesome$
-  ; load string to a0
-  (\auipc $t0       0x0)
-  (\ld    $a0 $t0   0x18)
-  ; set length = 8
-  (\addi  $a1 $zero 0x8)
-  ; load address of put-buf and jump to it
-  (\ld    $t0 $t0   0x20)
-  (\jalr  $zero $t0 0x0)
-  0x0
-  ; constants in-line because calculating instructions to load address is too hard
-  awesome.str$
-  (>> awesome.str$ 0x20)
-  put-buf$
-  (>> put-buf$ 0x20)
-)
+(define awesome$ (car (link
+  (start
+    ; initialize counter, stack
+    (\addi  $sp $sp (- 0 0x10)) ; negative hex would be nice
+    (\sd    $ra $sp 0x00)
+    (\sd    $s0 $sp 0x08)
+    (\addi  $s0 $zero 5)
+  )
+  (loop
+    ; load address of awesome.str$ to a0
+    (\auipc $a0 (rel awesome.str$))
+    (\addi  $a0 $a0 (+ (rel awesome.str$) 4))
+    ; set length = 8
+    (\addi  $a1 $zero 8)
+    ; load address of put-buf and call it
+    (\auipc $t0 (rel put-buf$))
+    (\jalr  $ra $t0 (+ (rel put-buf$) 4))
+    ; decrement counter
+    (\addi  $s0 $s0 -1)
+    ; if not zero jump back to loop
+    (\bne   $s0 $zero (rel loop))
+  )
+  (end
+    ; clean up stack, return
+    (\ld    $ra $sp 0x00)
+    (\ld    $s0 $sp 0x08)
+    (\addi  $sp $sp 0x10)
+    (\ret)
+  )
+)))
 (call-native awesome$)
