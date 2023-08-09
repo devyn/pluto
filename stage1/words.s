@@ -224,18 +224,19 @@ INITIAL_WORDS:
         .ascii "print-obj$"
         .balign 8
 
-.set INITIAL_WORDS_LEN, 32
+        # end
+        .quad 0
+        .quad 0
 
 .text
 
 # set up the initial words
 .global words_init
 words_init:
-        addi sp, sp, -0x20
+        addi sp, sp, -0x18
         sd ra, 0x00(sp)
         sd s1, 0x08(sp)
         sd s2, 0x10(sp)
-        sd s3, 0x18(sp)
         # zero the words table
         la a0, WORDS
         li a1, WORDS_LEN
@@ -243,15 +244,15 @@ words_init:
         call mem_set_d
         # unpack the initial words table
         la s1, INITIAL_WORDS
-        li s2, INITIAL_WORDS_LEN
 1:
-        beqz s2, .Lwords_init_ret
         # load the symbol into (a0, a1) and intern
+        # a zero length symbol ends the initial words list
         lhu a1, 0x08(s1) # len
+        beqz a1, .Lwords_init_ret # zero-length, end
         addi a0, s1, 0x0b # buf
         call symbol_intern
         beqz a0, .Lwords_init_ret # error
-        mv s3, a0 # save the symbol
+        mv s2, a0 # save the symbol
         # create the object
         lbu a0, 0x0a(s1) # type from INITIAL_WORDS
         ld a1, 0x00(s1) # field0 from INITIAL_WORDS
@@ -261,11 +262,9 @@ words_init:
         beqz a0, .Lwords_init_ret # error
         # call define with (symbol, object)
         mv a1, a0
-        mv a0, s3
+        mv a0, s2
         call define
         bnez a0, .Lwords_init_ret # error
-        # done: the word has been added
-        addi s2, s2, -1
         # increment pointer to INITIAL_WORDS entry
         lhu t1, 0x08(s1) # get length of string into t1
         addi s1, s1, 11 # length of (object, len, type) = 11 bytes
@@ -281,8 +280,7 @@ words_init:
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
         ld s2, 0x10(sp)
-        ld s3, 0x18(sp)
-        addi sp, sp, 0x20
+        addi sp, sp, 0x18
         ret
 
 
