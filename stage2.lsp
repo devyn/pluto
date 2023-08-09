@@ -16,7 +16,7 @@
 ; (allocate <size> <align>)
 (define allocate (proc args scope
   (car
-    (call-native (peek.d allocate$$)
+    (call-native allocate$
       (eval scope (car args))
       (eval scope (cadr args))))))
 

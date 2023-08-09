@@ -12,14 +12,6 @@
 .bss
 
 .align 3
-.global ALLOCATE
-ALLOCATE: .skip 8 # builtin_allocate
-
-.align 3
-.global DEALLOCATE
-DEALLOCATE: .skip 8 # builtin_deallocate
-
-.align 3
 .global BUILTIN_HEAP_PTR
 BUILTIN_HEAP_PTR: .skip 8 # _heap_start
 
@@ -41,19 +33,21 @@ _object_region_start: .skip 0xc0000 # 768 KiB
 
 .text
 
+# rewritable with up to 6 instructions
 # args: a0 = bytes to allocate, a1 = alignment
 # ret: a0 = pointer on success, zero on failure
 .global allocate
 allocate:
-        ld t0, (ALLOCATE)
-        jalr zero, (t0)
+        jal zero, builtin_allocate
+        .skip 5 * 4
 
+# rewritable with up to 6 instructions
 # args: a0 = pointer, a1 = number of bytes
 # ret: a0 = 0
 .global deallocate
 deallocate:
-        ld t0, (DEALLOCATE)
-        jalr zero, (t0)
+        jal zero, builtin_deallocate
+        .skip 5 * 4
 
 .global memory_init
 memory_init:
@@ -61,12 +55,6 @@ memory_init:
         sd ra, 0x00(sp)
         sd s1, 0x08(sp)
         # initialize globals
-        la t1, builtin_allocate
-        la t2, ALLOCATE
-        sd t1, (t2)
-        la t1, builtin_deallocate
-        la t2, DEALLOCATE
-        sd t1, (t2)
         la t1, _heap_start
         la t2, BUILTIN_HEAP_PTR
         sd t1, (t2)

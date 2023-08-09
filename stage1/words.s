@@ -134,16 +134,16 @@ INITIAL_WORDS:
         .ascii "eval"
         .balign 8
 
-        .quad ALLOCATE
-        .2byte 10
+        .quad allocate
+        .2byte 9
         .byte LISP_OBJECT_TYPE_INTEGER
-        .ascii "allocate$$"
+        .ascii "allocate$"
         .balign 8
 
-        .quad DEALLOCATE
-        .2byte 12
+        .quad deallocate
+        .2byte 11
         .byte LISP_OBJECT_TYPE_INTEGER
-        .ascii "deallocate$$"
+        .ascii "deallocate$"
         .balign 8
 
         .quad define
