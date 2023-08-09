@@ -6,12 +6,13 @@ OBJCOPY = $(CROSS_COMPILE)objcopy
 QEMU = qemu-system-riscv64
 QEMUFLAGS = -s -d guest_errors
 
-all: stage0.elf stage1.hex
+all: stage0.elf stage1.hex stage2.lsp
 
-clean: clean-stage0 clean-stage1
+clean: clean-stage0 clean-stage1 clean-stage2
 
 include stage0/make.mk
 include stage1/make.mk
+include stage2/make.mk
 
 qemu: stage0.elf
 	$(QEMU) \

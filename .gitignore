@@ -2,3 +2,4 @@
 *.elf
 *.bin
 *.hex
+/stage2.lsp
