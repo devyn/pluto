@@ -181,6 +181,15 @@ get_token:
         lb t0, (a0)
         li t1, '-'
         bne t0, t1, .Lget_token_integer_loop
+        # if it's a negative sign then make sure we have some digits
+        # if we don't, single hyphen is a valid symbol so do that
+        li t1, 2
+        bltu a1, t1, .Lget_token_symbol # EOF
+        lb t0, 1(a0)
+        li t1, '0'
+        bltu t0, t1, .Lget_token_symbol # < '0'
+        li t1, '9'
+        bgtu t0, t1, .Lget_token_symbol # > '9'
         # consume negative sign
         addi a0, a0, 1
         addi a4, a4, 1
