@@ -156,4 +156,8 @@
 (define \jr    (fn (reg offset) (\jalr  $zero reg offset)))
 (define \callr (fn (reg offset) (\jalr  $ra reg offset)))
 (define \ret   (fn ()           (\jalr  $zero $ra 0)))
+(define \beqz  (fn (reg offset) (\beq   reg $zero offset)))
+(define \bnez  (fn (reg offset) (\bne   reg $zero offset)))
+(define \bltz  (fn (reg offset) (\blt   reg $zero offset)))
+(define \bgez  (fn (reg offset) (\bge   reg $zero offset)))
 
