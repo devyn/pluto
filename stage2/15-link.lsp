@@ -31,7 +31,7 @@
 ; link a program
 ; expects multiple named sections with instructions following the name
 ; symbols defined in context: pc, rel, rel+, all sections
-; returns the address and size of the program
+; returns the address, size, and sections of the program
 (define link (proc program scope
   (let
     (
@@ -49,9 +49,10 @@
       (program-scope
         (concat
           ; define rel and rel+
-          (assoc
-            (quote (rel rel+))
-            (cons rel (cons rel+ ())))
+          (list
+            (cons (quote rel) rel)
+            (cons (quote rel+) rel+)
+          )
           (concat section-addrs scope)))
       (put-instruction
         (fn (pc instruction-expr)
@@ -70,6 +71,6 @@
         program-addr ; start pc = base addr
         program)
       ; the output of the above should be the end address of the program,
-      ; but we want to return (addr size)
-      (cons program-addr (cons program-size ()))))))
+      ; but we want to return (addr size section-addrs)
+      (list program-addr program-size section-addrs)))))
 

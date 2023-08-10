@@ -1,6 +1,6 @@
 ; try a simple assembler program
 (define awesome.str$ (ref "Awesome string!"))
-(define awesome$ (car (link
+(define awesome.out (link
   (start
     ; initialize counter, stack
     (\addi  $sp $sp -0x10)
@@ -35,5 +35,6 @@
     (\addi  $sp $sp 0x10)
     (\ret)
   )
-)))
+))
+(define awesome$ (car awesome.out))
 (call-native awesome$)

@@ -26,6 +26,10 @@
     (proc args scope
       (eval (eval scope (car args)) (cons map (eval scope (cadr args)))))))
 
+; make a list from args
+(define list
+  (proc args scope (eval-list scope args)))
+
 ; associate two lists into pairs
 ; if the second list is shorter than the first, remaining pairs will be associated to nil
 (define assoc
@@ -37,14 +41,14 @@
           (cons
             (car (car args))
             (car (cadr args)))
-          (unquote (cons map
-            (cons (cdr (car args))
-              (cons (cdr (cadr args)))))))))
+          (unquote (list map
+            (cdr (car args))
+            (cdr (cadr args)))))))
     ; pass evaluated first and second arg to `map`
     (proc args scope
-      (unquote (cons map
-        (cons (eval scope (car args))
-          (cons (eval scope (cadr args)))))))))
+      (unquote (list map
+        (eval scope (car args))
+        (eval scope (cadr args)))))))
 
 ; concat two lists
 (define concat
@@ -53,10 +57,11 @@
       (if (nil? (car args))
         (cadr args)
         (cons (car (car args))
-          (unquote (cons rec
-            (cons (cdr (car args)) (cons (cadr args))))))))
+          (unquote (list rec
+            (cdr (car args))
+            (cadr args))))))
     (proc args scope
-      (unquote (cons rec
-        (cons (eval scope (car args))
-          (cons (eval scope (cadr args)))))))))
+      (unquote (list rec
+        (eval scope (car args))
+        (eval scope (cadr args)))))))
 
