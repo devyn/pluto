@@ -12,7 +12,7 @@
           ; modify the tail of the cons in-place
           ; usually you should not do this
           (seq1
-            (poke.d (car (call-native +$ pair-ref 0x10)) (ref value))
+            (poke.d (car (call-native +$ 1 pair-ref 0x10)) (ref value))
             (deref pair-ref)))
         (eval scope' (cadr (cdr args))))))))
 

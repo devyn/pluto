@@ -14,7 +14,7 @@
 (define swap-if
   (proc args scope
     (let1 address-pair
-      (call-native swap-if$
+      (call-native swap-if$ 2
         (eval scope (car args))
         (ref (eval scope (cadr args)))
         (ref (eval scope (cadr (cdr args)))))
@@ -44,16 +44,16 @@
   0x00008067 ; ret
 )
 (define zero? (proc args scope
-  (car (call-native zero?$ (eval scope (car args))))))
+  (car (call-native zero?$ 1 (eval scope (car args))))))
 
 ; Returns 1 if the argument is nil
 (define nil? (proc args scope
   (let1 value (ref (eval scope (car args)))
-    (cleanup value (car (call-native zero?$ value))))))
+    (cleanup value (car (call-native zero?$ 1 value))))))
 
 ; Returns 1 if the two numbers are equal
 (define number-eq? (proc args scope
-  (zero? (car (call-native ^$
+  (zero? (car (call-native ^$ 1
     (eval scope (car args))
     (eval scope (cadr args)))))))
 

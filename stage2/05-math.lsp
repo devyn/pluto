@@ -9,7 +9,7 @@
           (eval scope (car args)) ; no more args
           (let1 value
             (car ;a0
-              (call-native address
+              (call-native address 1
                 (eval scope (car args))
                 (eval scope (cadr args))))
             ; tail recursive call with remainder of args
@@ -28,7 +28,7 @@
 ; print hex number, plain
 (define put-hex (fn (number digits)
   (seq1
-    (call-native put-hex$ number
+    (call-native put-hex$ 0 number
       (if (nil? digits) 16 digits))
     number)))
 

@@ -203,10 +203,17 @@ trap:
         mv a0, s1
         li a1, 16
         call put_hex
-1:
-        # loop forever
-        wfi
-        j 1b
+        # newline
+        li a0, '\n'
+        call putc
+        j shutdown
+
+.global shutdown
+shutdown:
+        # call opensbi sbi_shutdown
+        li a7, 0x08
+        ecall
+        1: j 1b
 
 .section .rodata
 
@@ -235,7 +242,7 @@ NOT_CALLABLE_MSG: .ascii "not-callable: "
 NOT_CALLABLE_MSG_LENGTH: .quad . - NOT_CALLABLE_MSG
 
 NO_FREE_MEM_MSG: .ascii "no-free-mem: "
-NO_FREE_MEM_MSG_LENGTH: .quad . - NO_FREE_MEM_MSG_LENGTH
+NO_FREE_MEM_MSG_LENGTH: .quad . - NO_FREE_MEM_MSG
 
 PRODUCE_MSG: .ascii "==> "
 PRODUCE_MSG_LENGTH: .quad . - PRODUCE_MSG

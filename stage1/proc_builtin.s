@@ -102,21 +102,21 @@ proc_deref:
 
 # Lisp procedure for calling native routines.
 #
-# > (call-native address a0 a1 a2 a3 a4 a5 a6 a7)
-# ==> (a0 a1)
+# > (call-native address return-n a0 a1 a2 a3 a4 a5 a6 a7)
+# ==> (a0 a1 .. a<return-n>)
 .global proc_call_native
 proc_call_native:
-        addi sp, sp, -0x68
+        addi sp, sp, -0x70
         sd ra, 0x00(sp)
         sd s1, 0x08(sp) # pointer to args on stack
         sd s2, 0x10(sp) # arg list to process
         sd a1, 0x18(sp) # local words table
         mv s2, a0
-        # address 0x20, a0-a7 from 0x28 .. 0x68
+        # address 0x20, return-n 0x28, a0-a7 from 0x30 .. 0x70
         addi s1, sp, 0x20
         # just in case, zero that memory to avoid unwanted side effects
         mv t1, s1
-        addi t2, sp, 0x68
+        addi t2, sp, 0x70
 2:
         sd zero, (t1)
         addi t1, t1, 8
@@ -147,38 +147,62 @@ proc_call_native:
 .Lproc_call_native_invoke:
         # load address to t0
         ld t0, 0x20(sp)
+        beqz t0, .Lproc_call_native_exc # assert address != 0
+        # check that return-n is not > 8
+        ld t1, 0x28(sp)
+        li t2, 8
+        bgtu t1, t2, .Lproc_call_native_exc
         # load arguments from stack
-        ld a0, 0x28(sp)
-        ld a1, 0x30(sp)
-        ld a2, 0x38(sp)
-        ld a3, 0x40(sp)
-        ld a4, 0x48(sp)
-        ld a5, 0x50(sp)
-        ld a6, 0x58(sp)
-        ld a7, 0x60(sp)
+        ld a0, 0x30(sp)
+        ld a1, 0x38(sp)
+        ld a2, 0x40(sp)
+        ld a3, 0x48(sp)
+        ld a4, 0x50(sp)
+        ld a5, 0x58(sp)
+        ld a6, 0x60(sp)
+        ld a7, 0x68(sp)
         # do the call
         jalr ra, (t0)
-        # store a0
-        sd a0, 0x28(sp)
-        # make list (a0 a1)
-        mv a0, a1
+        # store return args
+        sd a0, 0x30(sp)
+        sd a1, 0x38(sp)
+        sd a2, 0x40(sp)
+        sd a3, 0x48(sp)
+        sd a4, 0x50(sp)
+        sd a5, 0x58(sp)
+        sd a6, 0x60(sp)
+        sd a7, 0x68(sp)
+        # make return list in s2. first free it up
+        mv a0, s2
+        call release_object
+        mv s2, zero # nil
+        # calculate end of stack for return-n
+        addi s1, sp, 0x30 # beginning of args
+        ld t1, 0x28(sp) # return-n
+        slli t1, t1, 3 # x 8
+        add s1, s1, t1 # end of args to return
+.Lproc_call_native_ret_list_loop:
+        # check stack limit
+        addi t1, sp, 0x30
+        bleu s1, t1, .Lproc_call_native_ret_list
+        # decrement
+        addi s1, s1, -8
+        # load from stack, box
+        ld a0, (s1)
         call box_integer
         beqz a0, .Lproc_call_native_nomem
-        mv a1, zero
+        # form list
+        mv a1, s2
         call cons
         beqz a0, .Lproc_call_native_nomem
-        # ==> (a1)
-        mv s1, a0
-        ld a0, 0x28(sp)
-        call box_integer
-        beqz a0, .Lproc_call_native_nomem
-        mv a1, s1
-        call cons
-        beqz a0, .Lproc_call_native_nomem
-        # ==> (a0 . (a1))
-        mv a1, a0
+        mv s2, a0
+        j .Lproc_call_native_ret_list_loop
+.Lproc_call_native_ret_list:
+        # take a1 (return value) from s2
+        mv a1, s2
         mv a0, zero # ok
-        j .Lproc_call_native_ret 
+        mv s2, zero # used
+        j .Lproc_call_native_ret
 .Lproc_call_native_exc:
         li a0, EVAL_ERROR_EXCEPTION
         mv a1, zero
@@ -200,7 +224,7 @@ proc_call_native:
         ld s2, 0x10(sp)
         ld a0, 0x20(sp)
         ld a1, 0x28(sp)
-        addi sp, sp, 0x68
+        addi sp, sp, 0x70
         ret
 
 # Peek

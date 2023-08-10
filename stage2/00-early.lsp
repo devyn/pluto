@@ -1,8 +1,8 @@
 ; (define <key> <value>) = ?
-(call-native define$
+(call-native define$ 0
   (ref (quote define))
   (ref (proc args scope
-    (call-native define$
+    (call-native define$ 0
       (ref (car args))
       (ref (eval scope (car (cdr args))))))))
 
@@ -16,7 +16,7 @@
 ; (allocate <size> <align>)
 (define allocate (proc args scope
   (car
-    (call-native allocate$
+    (call-native allocate$ 1
       (eval scope (car args))
       (eval scope (cadr args))))))
 
@@ -45,7 +45,7 @@
 ; redefine define to return the original value
 (define define (proc args scope
   (seq1
-    (call-native define$
+    (call-native define$ 0
       (ref (car args))
       (ref (eval scope (cadr args))))
     (eval scope (car args)))))
@@ -53,7 +53,7 @@
 ; (print <object>) = <object>
 (define print (proc args scope
   (deref (car
-    (call-native print-obj$
+    (call-native print-obj$ 1
       (ref (eval scope (car args))))))))
 
 ; (let1 <var> <value> <expression>)

@@ -6,7 +6,7 @@
 ; Get refcount of object
 (define refcount-of (fn (arg)
   (let1 address (ref arg)
-    (cleanup address (peek.w (car (call-native +$ address 0x4)))))))
+    (cleanup address (peek.w (car (call-native +$ 1 address 0x4)))))))
 
 ; Get type of object as symbol
 (define types$ (allocate 0x40 8))

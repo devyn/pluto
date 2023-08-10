@@ -3,14 +3,14 @@
   (if (symbol-eq? (type-of string) (quote string))
     (let1 address (ref string)
       (seq1
-        (call-native put-buf$
+        (call-native put-buf$ 0
           (peek.d (+ address 0x08))
           (peek.d (+ address 0x10)))
         (deref address)))
     (error (quote not-a-string:) string))))
 
 ; put char
-(define putc (fn (char) (seq1 (call-native putc$ char) char)))
+(define putc (fn (char) (seq1 (call-native putc$ 0 char) char)))
 
 ; print hex nicely
 (define print-hex
