@@ -1,4 +1,4 @@
-; (define <key> <value>)
+; (define <key> <value>) = ?
 (call-native define$
   (ref (quote define))
   (ref (proc args scope
@@ -41,6 +41,14 @@
   (cdr (cons
     (eval scope (car args))
     (eval scope (cadr args))))))
+
+; redefine define to return the original value
+(define define (proc args scope
+  (seq1
+    (call-native define$
+      (ref (car args))
+      (ref (eval scope (cadr args))))
+    (eval scope (car args)))))
 
 ; (print <object>) = <object>
 (define print (proc args scope
