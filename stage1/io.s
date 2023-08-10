@@ -80,7 +80,7 @@ put_hex:
 .section .rodata
 
 # a 64-bit signed integer can have 18 decimal digits
-.align 8
+.align 3
 PUT_DEC_DIVISOR: .quad (1000000000000000000)
 
 .text
