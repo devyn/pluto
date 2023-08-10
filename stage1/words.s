@@ -134,6 +134,12 @@ INITIAL_WORDS:
         .ascii "cdr$"
         .balign 8
 
+        .quad cons
+        .2byte 5
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "cons$"
+        .balign 8
+
         .quad uncons
         .2byte 7
         .byte LISP_OBJECT_TYPE_INTEGER
