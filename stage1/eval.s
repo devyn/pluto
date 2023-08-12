@@ -152,17 +152,83 @@ call_procedure:
 .Lcall_procedure_not_callable:
         addi sp, sp, -0x18
         sd ra, 0x00(sp)
-        sd a1, 0x08(sp)
+        sd a0, 0x08(sp)
         sd a2, 0x10(sp)
         # release arguments
-        call release_object
-        ld a0, 0x08(sp)
+        mv a0, a1
         call release_object
         ld a0, 0x10(sp)
         call release_object
         # clean up stack and return error
         ld ra, 0x00(sp)
-        addi sp, sp, 0x18
+        ld a1, 0x08(sp)
         li a0, EVAL_ERROR_NOT_CALLABLE
-        mv a1, zero
+        addi sp, sp, 0x18
         ret
+
+# Takes the first element of a list and evaluates it
+#
+# a0 = pointer to structure. pass (list, _), will be written with (head, tail)
+# a1 = local words
+#
+# Return:
+#
+# a0 = eval error
+# a1 = eval error data if error
+#
+# The pointer will contain (nil, nil) on failure, no further release is necessary
+.global eval_head
+eval_head:
+        addi sp, sp, -0x28
+        sd ra, 0x00(sp)
+        sd s1, 0x08(sp) # s1 = a0, pointer to structure
+        sd a1, 0x10(sp) # locals
+        mv s1, a0
+        # uncons the list
+        ld t0, 0x00(a0)
+        sd zero, 0x00(a0) # taken
+        sd zero, 0x08(a0) # clear in case of error
+        mv a0, t0
+        call uncons
+        beqz a0, .Leval_head_exc # not a cons
+        # store the tail
+        sd a2, 0x08(s1)
+        # eval head x locals
+        mv a0, a1
+        ld a1, 0x10(sp)
+        sd zero, 0x10(sp) # used
+        call eval
+        bnez a0, .Leval_head_err # err
+        # store evaluated head
+        sd a1, 0x00(s1)
+        # set result to ok
+        sd zero, 0x18(sp)
+        sd zero, 0x20(sp)
+.Leval_head_ret:
+        # release locals if not used
+        ld a0, 0x10(sp)
+        call release_object
+        # restore and return
+        ld ra, 0x00(sp)
+        ld s1, 0x08(sp)
+        ld a0, 0x18(sp)
+        ld a1, 0x20(sp)
+        addi sp, sp, 0x28
+        ret
+.Leval_head_exc:
+        # set exception
+        li t0, EVAL_ERROR_EXCEPTION
+        sd t0, 0x18(sp)
+        sd zero, 0x20(sp)
+        j .Leval_head_err_ret
+.Leval_head_err:
+        # store result from eval
+        sd a0, 0x18(sp)
+        sd a1, 0x20(sp)
+.Leval_head_err_ret:
+        # release tail if it was set
+        ld a0, 0x08(s1)
+        call release_object
+        sd zero, 0x08(s1) # clear it because we released it
+        # return
+        j .Leval_head_ret

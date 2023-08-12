@@ -170,6 +170,12 @@ INITIAL_WORDS:
         .ascii "eval$"
         .balign 8
 
+        .quad eval_head
+        .2byte 10
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "eval-head$"
+        .balign 8
+
         .quad allocate
         .2byte 9
         .byte LISP_OBJECT_TYPE_INTEGER

@@ -1,62 +1,91 @@
+; RISC-V assembler (first pass)
+(define rv.opcode-len 7)
+(define rv.reg-len 5)
+(define rv.funct3-len 3)
+(define rv.funct7-len 7)
+(define rv.opcode-mask (bit-mask rv.opcode-len))
+(define rv.reg-mask (bit-mask rv.reg-len))
+(define rv.funct3-mask (bit-mask rv.funct3-len))
+(define rv.funct7-mask (bit-mask rv.funct7-len))
+
 ; RISC-V instruction formats
-(define rv.opcode-mask (bit-mask 7))
-(define rv.reg-mask (bit-mask 5))
-(define rv.funct3-mask (bit-mask 3))
-(define rv.funct7-mask (bit-mask 7))
+; These can be optimized later with native implementations using the assembler we're building
+(define rv.format.r (quote 
+  (left-fold | (& opcode rv.opcode-mask)
+    (list
+      (<< (& rd rv.reg-mask) 7)
+      (<< (& funct3 rv.funct3-mask) 12)
+      (<< (& rs1 rv.reg-mask) 15)
+      (<< (& rs2 rv.reg-mask) 20)
+      (<< (& funct7 rv.funct7-mask) 25)))))
 (define rv.instr.r
   (fn (opcode funct3 funct7)
     (fn (rd rs1 rs2)
-      (| (& opcode rv.opcode-mask)
-        (<< (& rd rv.reg-mask) 7)
-        (<< (& funct3 rv.funct3-mask) 12)
-        (<< (& rs1 rv.reg-mask) 15)
-        (<< (& rs2 rv.reg-mask) 20)
-        (<< (& funct7 rv.funct7-mask) 25)))))
+      (unquote rv.format.r))))
+
+(define rv.format.i (quote
+  (left-fold | (& opcode rv.opcode-mask)
+    (list
+      (<< (& rd rv.reg-mask) 7)
+      (<< (& funct3 rv.funct3-mask) 12)
+      (<< (& rs1 rv.reg-mask) 15)
+      (<< (& imm (bit-mask 12)) 20)))))
 (define rv.instr.i
   (fn (opcode funct3)
     (fn (rd rs1 imm)
-      (| (& opcode rv.opcode-mask)
-        (<< (& rd rv.reg-mask) 7)
-        (<< (& funct3 rv.funct3-mask) 12)
-        (<< (& rs1 rv.reg-mask) 15)
-        (<< (& imm (bit-mask 12)) 20)))))
+      (unquote rv.format.i))))
+
+(define rv.format.s (quote
+  (left-fold | (& opcode rv.opcode-mask)
+    (list
+      (<< (& imm (bit-mask 5)) 7)
+      (<< (& funct3 rv.funct3-mask) 12)
+      (<< (& rs1 rv.reg-mask) 15)
+      (<< (& rs2 rv.reg-mask) 20)
+      (<< (& (>> imm 5) (bit-mask 7)) 25)))))
 (define rv.instr.s
   (fn (opcode funct3)
     (fn (rs2 rs1 imm)
-      (| (& opcode rv.opcode-mask)
-        (<< (& imm (bit-mask 5)) 7)
-        (<< (& funct3 rv.funct3-mask) 12)
-        (<< (& rs1 rv.reg-mask) 15)
-        (<< (& rs2 rv.reg-mask) 20)
-        (<< (& (>> imm 5) (bit-mask 7)) 25)))))
+      (unquote rv.format.s))))
+
+(define rv.format.b (quote 
+  (left-fold | (& opcode rv.opcode-mask)
+    (list
+      (<< (& (>> imm 11) 1) 7)
+      (<< (& (>> imm 1) (bit-mask 4)) 8)
+      (<< (& funct3 rv.funct3-mask) 12)
+      (<< (& rs1 rv.reg-mask) 15)
+      (<< (& rs2 rv.reg-mask) 20)
+      (<< (& (>> imm 5) (bit-mask 6)) 25)
+      (<< (& (>> imm 12) 1) 31)))))
 (define rv.instr.b
   (fn (opcode funct3)
     (fn (rs1 rs2 imm)
-      (| (& opcode rv.opcode-mask)
-        (<< (& (>> imm 11) 1) 7)
-        (<< (& (>> imm 1) (bit-mask 4)) 8)
-        (<< (& funct3 rv.funct3-mask) 12)
-        (<< (& rs1 rv.reg-mask) 15)
-        (<< (& rs2 rv.reg-mask) 20)
-        (<< (& (>> imm 5) (bit-mask 6)) 25)
-        (<< (& (>> imm 12) 1) 31)))))
+      (unquote rv.format.b))))
+
+(define rv.format.u (quote
+  (| (& opcode rv.opcode-mask)
+    (| (<< (& rd rv.reg-mask) 7)
+      (+ ; add one if 11th bit is set
+        (& imm (<< (bit-mask 20) 12))
+        (<< (& imm 0x800) 1))))))
 (define rv.instr.u
   (fn (opcode)
     (fn (rd imm)
-      (| (& opcode rv.opcode-mask)
-        (<< (& rd rv.reg-mask) 7)
-        (+ ; add one if 11th bit is set
-          (& imm (<< (bit-mask 20) 12))
-          (<< (& imm 0x800) 1))))))
+      (unquote rv.format.u))))
+
+(define rv.format.j (quote
+  (left-fold | (& opcode rv.opcode-mask)
+    (list
+      (<< (& rd rv.reg-mask) 7)
+      (& imm (<< (bit-mask 8) 12))         ; inst[19:12] = imm[19:12]
+      (<< (& (>> imm 11) 1) 20)            ; inst[20]    = imm[11]
+      (<< (& (>> imm 1) (bit-mask 10)) 21) ; inst[30:21] = imm[10:1]
+      (<< (& (>> imm 20) 1) 31)))))        ; inst[31]    = imm[20]
 (define rv.instr.j
   (fn (opcode)
     (fn (rd imm)
-      (| (& opcode rv.opcode-mask)
-        (<< (& rd rv.reg-mask) 7)
-        (& imm (<< (bit-mask 8) 12))         ; inst[19:12] = imm[19:12]
-        (<< (& (>> imm 11) 1) 20)            ; inst[20]    = imm[11]
-        (<< (& (>> imm 1) (bit-mask 10)) 21) ; inst[30:21] = imm[10:1]
-        (<< (& (>> imm 20) 1) 31)))))        ; inst[31]    = imm[20]
+      (unquote rv.format.j))))
 
 ; RISC-V registers
 (define $zero 0)

@@ -450,82 +450,61 @@ proc_cdr:
 .global proc_cons
 proc_cons:
         # reserve stack, preserve return addr
-        addi sp, sp, -0x20
+        addi sp, sp, -0x28
         sd ra, 0x00(sp)
-        sd s1, 0x08(sp)
-        sd a1, 0x10(sp) # locals
-        sd zero, 0x18(sp) # cons head
-        mv s1, zero # args list
-        # get first arg
-        call uncons
-        beqz a0, .Lproc_cons_exc
-        # store rest of args, stash head for now
-        mv s1, a2
-        sd a1, 0x18(sp)
-        # acquire locals
+        sd a1, 0x08(sp) # locals
+        sd a0, 0x10(sp) # cons head
+        sd zero, 0x18(sp) # cons tail
+        sd zero, 0x20(sp) # unused args
+        # evaluate first two args
+        # arg 0 (head)
+        addi a0, sp, 0x10
+        call acquire_locals
+        call eval_head
+        bnez a0, .Lproc_cons_ret
+        # arg 1 (tail)
+        addi a0, sp, 0x18
+        ld a1, 0x08(sp) # locals
+        sd zero, 0x08(sp) # used
+        call eval_head
+        bnez a0, .Lproc_cons_ret
+        # cons head, tail
         ld a0, 0x10(sp)
-        call acquire_object
-        # unstash and eval
-        mv a1, a0
-        ld a0, 0x18(sp)
-        sd zero, 0x18(sp)
-        call eval
-        # handle err
-        bnez a0, .Lproc_cons_end
-        # store result
-        sd a1, 0x18(sp)
-        # get second arg
-        mv a0, s1
-        mv s1, zero
-        call uncons
-        beqz a0, .Lproc_cons_exc
-        # store rest of args (will release on ret)
-        mv s1, a2
-        # eval second arg, give up locals
-        mv a0, a1
-        ld a1, 0x10(sp)
-        sd zero, 0x10(sp)
-        call eval
-        # handle err
-        bnez a0, .Lproc_cons_end
-        # do cons (tail already in a1)
-        ld a0, 0x18(sp)
-        sd zero, 0x18(sp)
+        ld a1, 0x18(sp)
+        sd zero, 0x10(sp) # used
+        sd zero, 0x18(sp) # used
         call cons
         beqz a0, .Lproc_cons_no_mem
-        # move cons to a1 (result), set a0 to ok
-        mv a1, a0
-        li a0, 0
-        # done
-        j .Lproc_cons_end
-.Lproc_cons_no_mem:
-        li a0, EVAL_ERROR_NO_FREE_MEM
-        li a1, 0
-        j .Lproc_cons_end
-.Lproc_cons_exc:
-        li a0, EVAL_ERROR_EXCEPTION
-        li a1, 0
-.Lproc_cons_end:
+        mv a1, a0 # result
+        mv a0, zero # ok
+.Lproc_cons_ret:
         # stash return value
         addi sp, sp, -0x10
         sd a0, 0x00(sp)
         sd a1, 0x08(sp)
-        # release a1 arg list
-        mv a0, s1
+        # release from 0x18 .. 0x38 (sp)
+        ld a0, 0x18(sp)
         call release_object
-        # release locals
         ld a0, 0x20(sp)
         call release_object
-        # release cons head
         ld a0, 0x28(sp)
+        call release_object
+        ld a0, 0x30(sp)
         call release_object
         # load stashed data and return
         ld a0, 0x00(sp)
         ld a1, 0x08(sp)
         ld ra, 0x10(sp)
-        ld s1, 0x18(sp)
-        addi sp, sp, 0x30
+        addi sp, sp, 0x38
         ret
+.Lproc_cons_no_mem:
+        li a0, EVAL_ERROR_NO_FREE_MEM
+        li a1, 0
+        j .Lproc_cons_ret
+.Lproc_cons_exc:
+        li a0, EVAL_ERROR_EXCEPTION
+        li a1, 0
+        j .Lproc_cons_ret
 
 # Create procedure
 # e.g. (proc args locals (car args)) ; equivalent to quote
@@ -649,34 +628,50 @@ proc_stub:
 # (eval <locals> <expression>)
 .global proc_eval
 proc_eval:
-        addi sp, sp, -0x20
+        addi sp, sp, -0x28
         sd ra, 0x00(sp)
-        sd a1, 0x10(sp)
-        # evaluate first arg = locals, to 0x18(sp)
-        call uncons
-        beqz a0, .Lproc_eval_exc # end of arg list
-        sd a2, 0x08(sp) # save rest of arg list
-        mv a0, a1 # eval head
-        ld a1, 0x10(sp)
-        call acquire_locals # we need to use a1 locals one more time
-        call eval
+        sd a1, 0x08(sp) # locals (in)
+        sd a0, 0x10(sp) # arg 0 = provided locals
+        sd zero, 0x18(sp) # arg 1 = expression
+        sd zero, 0x20(sp) # unused args
+        # arg 0
+        addi a0, sp, 0x10
+        call acquire_locals
+        call eval_head
         bnez a0, .Lproc_eval_error
-        sd a1, 0x18(sp)
-        # evaluate second arg = expression, to 0x20(sp)
-        ld a0, 0x08(sp)
-        call car # drop rest
-        ld a1, 0x10(sp)
-        call eval
+        # arg 1
+        addi a0, sp, 0x18
+        ld a1, 0x08(sp) # locals
+        sd zero, 0x08(sp) # used
+        call eval_head
         bnez a0, .Lproc_eval_error
-        # tail-evaluate the result again in provided scope
-        mv a0, a1
-        ld a1, 0x18(sp)
+        # release rest of args
+        ld a0, 0x20(sp)
+        call release_object
+        # tail-call eval (args are actually in reverse of what they are for eval)
         ld ra, 0x00(sp)
-        addi sp, sp, 0x20
+        ld a1, 0x10(sp)
+        ld a0, 0x18(sp)
+        addi sp, sp, 0x28
         j eval
-.Lproc_eval_exc:
-        li a0, EVAL_ERROR_EXCEPTION
 .Lproc_eval_error:
-        ld ra, 0x00(sp)
-        addi sp, sp, 0x20
+        # on error, release everything remaining in the stack
+        # stash a0, a1 first
+        addi sp, sp, -0x10
+        sd a0, 0x00(sp)
+        sd a1, 0x08(sp)
+        # release 0x18 .. 0x38 (sp)
+        ld a0, 0x18(sp)
+        call release_object
+        ld a0, 0x20(sp)
+        call release_object
+        ld a0, 0x28(sp)
+        call release_object
+        ld a0, 0x30(sp)
+        call release_object
+        # restore and return
+        ld a0, 0x00(sp)
+        ld a1, 0x08(sp)
+        ld ra, 0x10(sp)
+        addi sp, sp, 0x38
         ret
