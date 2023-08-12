@@ -24,8 +24,8 @@ WORDS: .skip WORDS_LEN * 8
 # The initial words list is a packed efficient format consisting of variable-length records of:
 #
 # 1. first field (address or int), 8 bytes
-# 2. symbol length, 2 bytes unsigned (load with `lhu`)
-# 3. type, byte
+# 2. symbol length, unsigned byte (load with `lbu`)
+# 3. type, unsigned byte
 # 3. symbol text, variable length
 #
 # the beginning of each should be aligned to 8 bytes
@@ -33,235 +33,235 @@ WORDS: .skip WORDS_LEN * 8
 .global INITIAL_WORDS
 INITIAL_WORDS:
         .quad proc_hello
-        .2byte 5
+        .byte 5
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "hello"
         .balign 8
 
         .quad proc_quote
-        .2byte 5
+        .byte 5
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "quote"
         .balign 8
 
         .quad proc_ref
-        .2byte 3
+        .byte 3
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "ref"
         .balign 8
 
         .quad proc_deref
-        .2byte 5
+        .byte 5
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "deref"
         .balign 8
 
         .quad proc_call_native
-        .2byte 11
+        .byte 11
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "call-native"
         .balign 8
 
         .quad proc_peek_b
-        .2byte 6
+        .byte 6
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "peek.b"
         .balign 8
 
         .quad proc_peek_h
-        .2byte 6
+        .byte 6
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "peek.h"
         .balign 8
 
         .quad proc_peek_w
-        .2byte 6
+        .byte 6
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "peek.w"
         .balign 8
 
         .quad proc_peek_d
-        .2byte 6
+        .byte 6
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "peek.d"
         .balign 8
 
         .quad proc_poke_b
-        .2byte 6
+        .byte 6
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "poke.b"
         .balign 8
 
         .quad proc_poke_h
-        .2byte 6
+        .byte 6
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "poke.h"
         .balign 8
 
         .quad proc_poke_w
-        .2byte 6
+        .byte 6
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "poke.w"
         .balign 8
 
         .quad proc_poke_d
-        .2byte 6
+        .byte 6
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "poke.d"
         .balign 8
 
         .quad proc_car
-        .2byte 3
+        .byte 3
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "car"
         .balign 8
 
         .quad car
-        .2byte 4
+        .byte 4
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "car$"
         .balign 8
 
         .quad proc_cdr
-        .2byte 3
+        .byte 3
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "cdr"
         .balign 8
 
         .quad cdr
-        .2byte 4
+        .byte 4
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "cdr$"
         .balign 8
 
         .quad proc_cons
-        .2byte 4
+        .byte 4
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "cons"
         .balign 8
 
         .quad cons
-        .2byte 5
+        .byte 5
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "cons$"
         .balign 8
 
         .quad uncons
-        .2byte 7
+        .byte 7
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "uncons$"
         .balign 8
 
         .quad proc_proc
-        .2byte 4
+        .byte 4
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "proc"
         .balign 8
 
         .quad proc_eval
-        .2byte 4
+        .byte 4
         .byte LISP_OBJECT_TYPE_PROCEDURE
         .ascii "eval"
         .balign 8
 
         .quad eval
-        .2byte 5
+        .byte 5
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "eval$"
         .balign 8
 
         .quad eval_head
-        .2byte 10
+        .byte 10
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "eval-head$"
         .balign 8
 
         .quad allocate
-        .2byte 9
+        .byte 9
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "allocate$"
         .balign 8
 
         .quad deallocate
-        .2byte 11
+        .byte 11
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "deallocate$"
         .balign 8
 
         .quad acquire_object
-        .2byte 15
+        .byte 15
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "acquire-object$"
         .balign 8
 
         .quad release_object
-        .2byte 15
+        .byte 15
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "release-object$"
         .balign 8
 
         .quad define
-        .2byte 7
+        .byte 7
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "define$"
         .balign 8
 
         .quad symbol_intern
-        .2byte 14
+        .byte 14
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "symbol-intern$"
         .balign 8
 
         .quad eval
-        .2byte 5
+        .byte 5
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "eval$"
         .balign 8
 
         .quad lookup
-        .2byte 7
+        .byte 7
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "lookup$"
         .balign 8
 
         .quad putc
-        .2byte 5
+        .byte 5
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "putc$"
         .balign 8
 
         .quad put_buf
-        .2byte 8
+        .byte 8
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "put-buf$"
         .balign 8
 
         .quad put_hex
-        .2byte 8
+        .byte 8
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "put-hex$"
         .balign 8
 
         .quad put_dec
-        .2byte 8
+        .byte 8
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "put-dec$"
         .balign 8
 
         .quad getc
-        .2byte 5
+        .byte 5
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "getc$"
         .balign 8
 
         .quad get_line
-        .2byte 9
+        .byte 9
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "get-line$"
         .balign 8
 
         .quad print_obj
-        .2byte 10
+        .byte 10
         .byte LISP_OBJECT_TYPE_INTEGER
         .ascii "print-obj$"
         .balign 8
@@ -289,14 +289,14 @@ words_init:
 1:
         # load the symbol into (a0, a1) and intern
         # a zero length symbol ends the initial words list
-        lhu a1, 0x08(s1) # len
+        lbu a1, 0x08(s1) # len
         beqz a1, .Lwords_init_ret # zero-length, end
-        addi a0, s1, 0x0b # buf
+        addi a0, s1, 0x0a # buf
         call symbol_intern
         beqz a0, .Lwords_init_ret # error
         mv s2, a0 # save the symbol
         # create the object
-        lbu a0, 0x0a(s1) # type from INITIAL_WORDS
+        lbu a0, 0x09(s1) # type from INITIAL_WORDS
         ld a1, 0x00(s1) # field0 from INITIAL_WORDS
         mv a2, zero
         mv a3, zero
@@ -308,8 +308,8 @@ words_init:
         call define
         bnez a0, .Lwords_init_ret # error
         # increment pointer to INITIAL_WORDS entry
-        lhu t1, 0x08(s1) # get length of string into t1
-        addi s1, s1, 11 # length of (object, len, type) = 11 bytes
+        lbu t1, 0x08(s1) # get length of string into t1
+        addi s1, s1, 10 # length of (object, len, type) = 10 bytes
         add s1, s1, t1 # add length of string
         # align pointer to 8 bytes
         andi t1, s1, (1 << 3) - 1 # mask remainder
