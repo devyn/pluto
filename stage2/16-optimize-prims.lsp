@@ -94,16 +94,16 @@
     (\sd    $a1 $sp 0x08)
     ; free locals
     (\ld    $a0 $sp 0x28)
-    (\auipc $ra (rel  acquire-object$))
-    (\callr $ra (rel+ acquire-object$))
+    (\auipc $ra (rel  release-object$))
+    (\callr $ra (rel+ release-object$))
     ; free args/head (never need to free tail)
     (\ld    $a0 $sp 0x30)
-    (\auipc $ra (rel  acquire-object$))
-    (\callr $ra (rel+ acquire-object$))
+    (\auipc $ra (rel  release-object$))
+    (\callr $ra (rel+ release-object$))
     ; free s1
     (\mv    $a0 $s1)
-    (\auipc $ra (rel  acquire-object$))
-    (\callr $ra (rel+ acquire-object$))
+    (\auipc $ra (rel  release-object$))
+    (\callr $ra (rel+ release-object$))
     ; restore and return
     (\ld    $a0 $sp 0x00)
     (\ld    $a1 $sp 0x08)
