@@ -266,6 +266,18 @@ INITIAL_WORDS:
         .ascii "print-obj$"
         .balign 8
 
+        .quad box_integer
+        .byte 12
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "box-integer$"
+        .balign 8
+
+        .quad unbox_integer
+        .byte 14
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "unbox-integer$"
+        .balign 8
+
         # end
         .quad 0
         .quad 0
