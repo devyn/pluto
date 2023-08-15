@@ -60,7 +60,7 @@ symbol_intern:
         sd s1, 0x08(sp) # s1 = a0/buf
         sd s2, 0x10(sp) # s2 = a1/len
         sd s3, 0x18(sp) # s3 = symbol table entry address
-        sd s4, 0x18(sp) # s4 = current list entry address, or temp ptr while constructing symbol
+        sd s4, 0x20(sp) # s4 = current list entry address, or temp ptr while constructing symbol
         mv s1, a0
         mv s2, a1
         # calculate hash
