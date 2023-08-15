@@ -107,8 +107,12 @@ symbol_intern:
         mv a1, s1
         mv a2, s4
         call mem_copy
+        # get symbol hash
+        mv a0, s4
+        mv a1, s2
+        call symbol_hash
         # create a new object for the symbol
-        mv a3, zero
+        andi a3, a0, 0xff # LISP_SYMBOL_HASH
         mv a2, s2 # LISP_SYMBOL_LEN
         mv a1, s4 # LISP_SYMBOL_BUF
         li a0, LISP_OBJECT_TYPE_SYMBOL

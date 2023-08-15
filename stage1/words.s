@@ -463,9 +463,7 @@ get_words_ptr:
         lwu t2, LISP_OBJECT_TYPE(t1)
         li t3, LISP_OBJECT_TYPE_SYMBOL
         bne t2, t3, .Lget_words_ptr_error # not symbol => error
-        ld a0, LISP_SYMBOL_BUF(t1)
-        ld a1, LISP_SYMBOL_LEN(t1)
-        call symbol_hash
+        lb a0, LISP_SYMBOL_HASH(t1)
         # mask the hash to number of bits
         andi a0, a0, (1 << WORDS_HASH_BITS) - 1
         # times 8 (double word)

@@ -13,6 +13,7 @@ struct lisp_cons {
 struct lisp_symbol {
   char *buf;
   unsigned long len; // cap = len for symbols (they must be allocated with exact size)
+  char hash; // for hashtables
 };
 
 struct lisp_string {
