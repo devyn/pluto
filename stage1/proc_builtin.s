@@ -450,18 +450,18 @@ proc_cdr:
 .global proc_cons
 proc_cons:
         # reserve stack, preserve return addr
-        addi sp, sp, -0x28
+        addi sp, sp, -0x20
         sd ra, 0x00(sp)
         sd a1, 0x08(sp) # locals
-        sd a0, 0x10(sp) # cons head
-        sd zero, 0x18(sp) # cons tail
-        sd zero, 0x20(sp) # unused args
+        sd zero, 0x10(sp) # cons head
+        sd a0, 0x18(sp) # remaining args
         # evaluate first two args
         # arg 0 (head)
-        addi a0, sp, 0x10
+        addi a0, sp, 0x18
         call acquire_locals
         call eval_head
         bnez a0, .Lproc_cons_ret
+        sd a1, 0x10(sp)
         # arg 1 (tail)
         addi a0, sp, 0x18
         ld a1, 0x08(sp) # locals
@@ -470,9 +470,8 @@ proc_cons:
         bnez a0, .Lproc_cons_ret
         # cons head, tail
         ld a0, 0x10(sp)
-        ld a1, 0x18(sp)
+        # a1 = tail, from eval
         sd zero, 0x10(sp) # used
-        sd zero, 0x18(sp) # used
         call cons
         beqz a0, .Lproc_cons_no_mem
         mv a1, a0 # result
@@ -482,20 +481,18 @@ proc_cons:
         addi sp, sp, -0x10
         sd a0, 0x00(sp)
         sd a1, 0x08(sp)
-        # release from 0x18 .. 0x38 (sp)
+        # release from 0x18 .. 0x30 (sp)
         ld a0, 0x18(sp)
         call release_object
         ld a0, 0x20(sp)
         call release_object
         ld a0, 0x28(sp)
         call release_object
-        ld a0, 0x30(sp)
-        call release_object
         # load stashed data and return
         ld a0, 0x00(sp)
         ld a1, 0x08(sp)
         ld ra, 0x10(sp)
-        addi sp, sp, 0x38
+        addi sp, sp, 0x30
         ret
 .Lproc_cons_no_mem:
         li a0, EVAL_ERROR_NO_FREE_MEM
@@ -631,20 +628,22 @@ proc_eval:
         addi sp, sp, -0x28
         sd ra, 0x00(sp)
         sd a1, 0x08(sp) # locals (in)
-        sd a0, 0x10(sp) # arg 0 = provided locals
+        sd zero, 0x10(sp) # arg 0 = provided locals
         sd zero, 0x18(sp) # arg 1 = expression
-        sd zero, 0x20(sp) # unused args
+        sd a0, 0x20(sp) # remaining args
         # arg 0
-        addi a0, sp, 0x10
+        addi a0, sp, 0x20
         call acquire_locals
         call eval_head
         bnez a0, .Lproc_eval_error
+        sd a1, 0x10(sp)
         # arg 1
-        addi a0, sp, 0x18
+        addi a0, sp, 0x20
         ld a1, 0x08(sp) # locals
         sd zero, 0x08(sp) # used
         call eval_head
         bnez a0, .Lproc_eval_error
+        sd a1, 0x18(sp)
         # release rest of args
         ld a0, 0x20(sp)
         call release_object

@@ -18,84 +18,68 @@
 # a1 = return value / error details object
 .global eval
 eval:
-        addi sp, sp, -0x20
+        addi sp, sp, -0x18
         sd ra, 0x00(sp)
-        sd s1, 0x08(sp) # s1 = expression to evaluate
-        sd s2, 0x10(sp) # s2 = local words list
-        sd s3, 0x18(sp) # cons tail (procedure arglist)
-        mv s1, a0
-        mv s2, a1
+        sd a0, 0x08(sp) # a0 = expression to evaluate
+        sd a1, 0x10(sp) # a1 = local words list
         # check type of expression
-        beqz s1, .Leval_literal # return literal nil
-        lwu t1, LISP_OBJECT_TYPE(s1)
+        beqz a0, .Leval_literal # return literal nil
+        lwu t1, LISP_OBJECT_TYPE(a0)
         li t2, LISP_OBJECT_TYPE_SYMBOL
         beq t1, t2, .Leval_symbol # eval symbol just looks it up
         li t2, LISP_OBJECT_TYPE_CONS
         bne t1, t2, .Leval_literal # anything other than a cons or sym is just returned literally
-        # destructure the cons to (s1 . s3)
-        call uncons
-        mv s1, a1
-        mv s3, a2
-        # if it's a cons, we evaluate head first, it should be a procedure
-        mv a0, s1
-        mv a1, s2
+        # evaluate the head from the cons, it should be a procedure
+        addi a0, sp, 0x08
         call acquire_locals
-        call eval
-        mv s1, zero # used the head, so set to nil
+        call eval_head
         bnez a0, .Leval_ret # error
         # call the (assumed) procedure with the tail of the cons as argument list
         mv a0, a1
-        mv a1, s3
-        mv a2, s2
-        # tail call: call_procedure
+        ld a1, 0x08(sp) # args
+        ld a2, 0x10(sp) # locals
+        # restore stack and tail call
         ld ra, 0x00(sp)
-        ld s1, 0x08(sp)
-        ld s2, 0x10(sp)
-        ld s3, 0x18(sp)
-        addi sp, sp, 0x20
+        addi sp, sp, 0x18
         j call_procedure
 .Leval_symbol:
-        # if it's a symbol we just look it up
-        mv a0, s1
         call acquire_object # keep symbol, in case error
-        mv a1, s2
+        # look the symbol up in locals
+        ld a1, 0x10(sp)
+        sd zero, 0x10(sp) # used
         call lookup_var
-        mv s2, zero # used
         beqz a0, .Leval_error_undefined
-        # release the symbol
-        mv s2, a1 # save found value
-        mv a0, s1
-        call release_object
-        mv a0, zero # success
-        mv a1, s2   # found value
-        mv s1, zero # used
-        mv s2, zero # used
-        j .Leval_ret
-.Leval_error_undefined:
-        li a0, EVAL_ERROR_UNDEFINED
-        mv a1, s1 # saved symbol as error details
-        mv s1, zero # used
-        j .Leval_ret
-.Leval_literal:
-        mv a0, zero
-        mv a1, s1
-        mv s1, zero # used
+        # return
+        li a0, 0 # success
+        # a1 = found value
 .Leval_ret:
-        # release s1 and s2 if they're still set, since they aren't part of the return value
+        # release the two values on the stack if they're still set,
+        # since they aren't part of the return value
         addi sp, sp, -0x10
         sd a0, 0x00(sp)
         sd a1, 0x08(sp)
-        mv a0, s1
+        ld a0, 0x18(sp)
         call release_object
-        mv a0, s2
+        ld a0, 0x20(sp)
         call release_object
         ld a0, 0x00(sp)
         ld a1, 0x08(sp)
         ld ra, 0x10(sp)
-        ld s1, 0x18(sp)
-        ld s2, 0x20(sp)
-        ld s3, 0x28(sp)
-        addi sp, sp, 0x30
+        addi sp, sp, 0x28
+        ret
+.Leval_error_undefined:
+        li a0, EVAL_ERROR_UNDEFINED
+        ld a1, 0x08(sp) # saved symbol as error details
+        sd zero, 0x08(sp) # used
+        j .Leval_ret
+.Leval_literal:
+        # do quick return, just release locals
+        ld a0, 0x10(sp)
+        call release_object
+        ld ra, 0x00(sp)
+        mv a0, zero # ok
+        ld a1, 0x08(sp)
+        addi sp, sp, 0x18
         ret
 
 # Call before eval to increment refcount on locals (a1)
@@ -168,67 +152,60 @@ call_procedure:
 
 # Takes the first element of a list and evaluates it
 #
-# a0 = pointer to structure. pass (list, _), will be written with (head, tail)
+# a0 = pointer to pointer to tail - will be overwritten with next tail
 # a1 = local words
 #
 # Return:
 #
 # a0 = eval error
-# a1 = eval error data if error
+# a1 = evaluated head or eval error
 #
-# The pointer will contain (nil, nil) on failure, no further release is necessary
+# On error, nil will be written to the tail pointer and the remainder will be released.
 .global eval_head
 eval_head:
-        addi sp, sp, -0x28
+        addi sp, sp, -0x18
         sd ra, 0x00(sp)
-        sd s1, 0x08(sp) # s1 = a0, pointer to structure
+        sd a0, 0x08(sp) # pointer to pointer to tail
         sd a1, 0x10(sp) # locals
-        mv s1, a0
         # uncons the list
-        ld t0, 0x00(a0)
-        sd zero, 0x00(a0) # taken
-        sd zero, 0x08(a0) # clear in case of error
+        ld t0, (a0)
+        sd zero, (a0) # taken
         mv a0, t0
         call uncons
         beqz a0, .Leval_head_exc # not a cons
         # store the tail
-        sd a2, 0x08(s1)
+        ld t0, 0x08(sp)
+        sd a2, (t0)
         # eval head x locals
         mv a0, a1
         ld a1, 0x10(sp)
         sd zero, 0x10(sp) # used
         call eval
-        bnez a0, .Leval_head_err # err
-        # store evaluated head
-        sd a1, 0x00(s1)
-        # set result to ok
-        sd zero, 0x18(sp)
-        sd zero, 0x20(sp)
 .Leval_head_ret:
+        addi sp, sp, -0x10
+        # store result
+        sd a0, 0x00(sp)
+        sd a1, 0x08(sp)
         # release locals if not used
-        ld a0, 0x10(sp)
+        ld a0, 0x20(sp)
         call release_object
-        # restore and return
-        ld ra, 0x00(sp)
-        ld s1, 0x08(sp)
+        # release tail if error
+        ld t0, 0x00(sp)
+        beqz t0, 1f
         ld a0, 0x18(sp)
-        ld a1, 0x20(sp)
+        ld a0, (a0)
+        call release_object
+        ld a0, 0x18(sp)
+        sd zero, (a0)
+1:
+        # restore and return
+        ld a0, 0x00(sp)
+        ld a1, 0x08(sp)
+        ld ra, 0x10(sp)
         addi sp, sp, 0x28
         ret
 .Leval_head_exc:
         # set exception
-        li t0, EVAL_ERROR_EXCEPTION
-        sd t0, 0x18(sp)
-        sd zero, 0x20(sp)
-        j .Leval_head_err_ret
-.Leval_head_err:
-        # store result from eval
-        sd a0, 0x18(sp)
-        sd a1, 0x20(sp)
-.Leval_head_err_ret:
-        # release tail if it was set
-        ld a0, 0x08(s1)
-        call release_object
-        sd zero, 0x08(s1) # clear it because we released it
-        # return
+        li a0, EVAL_ERROR_EXCEPTION
+        mv a1, zero
         j .Leval_head_ret

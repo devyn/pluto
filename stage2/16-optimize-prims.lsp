@@ -31,13 +31,12 @@
 (define eval-list (box-procedure (car (link
   (start
     ; stash locals, set up variables
-    (\addi  $sp $sp -0x30)
+    (\addi  $sp $sp -0x28)
     (\sd    $ra $sp 0x00)
     (\sd    $s1 $sp 0x08)
     (\sd    $s2 $sp 0x10)
     (\sd    $a1 $sp 0x18) ; locals
-    (\sd    $a0 $sp 0x20) ; args / head
-    (\sd    $zero $sp 0x28) ; tail
+    (\sd    $a0 $sp 0x20) ; remaining args
     (\li    $s1 0) ; return value (dest)
     (\li    $s2 0) ; current node of dest to append to
   )
@@ -53,22 +52,23 @@
     (\callr $ra (rel+ eval-head$))
     (\bnez  $a0 (rel  ret))
     ; swap provided locals into position
-    (\ld    $t0 $sp 0x20) ; new locals
+    (\mv    $t0 $a1)      ; new locals
     (\ld    $a1 $sp 0x18) ; old locals (use one more time)
     (\sd    $t0 $sp 0x18) ; save new as locals
-    ; shuffle arg list back
-    (\ld    $t0 $sp 0x28)
-    (\sd    $t0 $sp 0x20)
-    (\sd    $zero $sp 0x28)
     ; arg 1 - list to evaluate
     (\addi  $a0 $sp 0x20)
     (\auipc $ra (rel  eval-head$))
     (\callr $ra (rel+ eval-head$))
     (\bnez  $a0 (rel  ret))
+    ; temporarily stash arg list in s1
+    (\mv    $s1 $a1)
     ; release rest of args
-    (\ld    $a0 $sp 0x28)
+    (\ld    $a0 $sp 0x20)
     (\auipc $ra (rel  release-object$))
     (\callr $ra (rel+ release-object$))
+    ; store new args
+    (\sd    $s1 $sp 0x20)
+    (\li    $s1 0)
   )
   (loop
     ; check if next is nil
@@ -79,19 +79,15 @@
     (\auipc $ra (rel  acquire-object$))
     (\callr $ra (rel+ acquire-object$))
     (\mv    $a1 $a0)
-    ; set address of head/tail
+    ; set address of args
     (\addi  $a0 $sp 0x20)
     ; call eval-head$
     (\auipc $ra (rel  eval-head$))
     (\callr $ra (rel+ eval-head$))
     ; handle error
     (\bnez  $a0 (rel  ret))
-    ; move tail back to args position
-    (\ld    $a0 $sp 0x20)
-    (\ld    $t0 $sp 0x28)
-    (\sd    $t0 $sp 0x20)
-    (\sd    $zero $sp 0x28)
     ; make cons with nil
+    (\mv    $a0 $a1)
     (\li    $a1 0)
     (\auipc $ra (rel  cons$))
     (\callr $ra (rel+ cons$))
@@ -125,7 +121,7 @@
     (\ld    $a0 $sp 0x28)
     (\auipc $ra (rel  release-object$))
     (\callr $ra (rel+ release-object$))
-    ; free args/head (never need to free tail)
+    ; free args
     (\ld    $a0 $sp 0x30)
     (\auipc $ra (rel  release-object$))
     (\callr $ra (rel+ release-object$))
@@ -139,7 +135,7 @@
     (\ld    $ra $sp 0x10)
     (\ld    $s1 $sp 0x18)
     (\ld    $s2 $sp 0x20)
-    (\addi  $sp $sp 0x40)
+    (\addi  $sp $sp 0x38)
     (\ret)
   )
   (nomem
@@ -154,20 +150,20 @@
   ; unbox first arg into s1
   ; args list on stack for eval-head
   (start
-    (\addi  $sp $sp -0x48)
+    (\addi  $sp $sp -0x40)
     (\sd    $ra $sp 0x00)
     (\sd    $s1 $sp 0x08)
     (\sd    $a1 $sp 0x10) ; locals
+    (\sd    $s2 $sp 0x18)
     (\sd    $a0 $sp 0x20) ; args
-    (\sd    $zero $sp 0x28)
-    (\sd    $zero $sp 0x30) ; first flag
+    (\sd    $zero $sp 0x28) ; first flag
     ; load address from data
     (\mv    $a0 $a2)
     (\auipc $ra (rel  unbox-integer$))
     (\callr $ra (rel+ unbox-integer$))
     (\beqz  $a0 (rel  exc))
     (\beqz  $a1 (rel  exc))
-    (\sd    $a1 $sp 0x18) ; routine
+    (\mv    $s2 $a1) ; routine
   )
   (loop
     ; eval arg
@@ -179,20 +175,16 @@
     (\auipc $ra (rel  eval-head$))
     (\callr $ra (rel+ eval-head$))
     (\bnez  $a0 (rel  ret)) ; err
-    ; shuffle and unbox
-    (\ld    $a0 $sp 0x20)
-    (\ld    $t0 $sp 0x28)
-    (\sd    $t0 $sp 0x20)
-    (\sd    $zero $sp 0x28)
+    ; unbox
+    (\mv    $a0 $a1)
     (\auipc $ra (rel  unbox-integer$))
     (\callr $ra (rel+ unbox-integer$))
     ; check if first
-    (\ld    $t0 $sp 0x30)
+    (\ld    $t0 $sp 0x28)
     (\beqz  $t0 (rel first))
     ; call routine with a0, a1
-    (\ld    $ra $sp 0x18)
     (\mv    $a0 $s1)
-    (\callr $ra 0)
+    (\callr $s2 0)
     (\mv    $s1 $a0)
     ; check if end
     (\ld    $t0 $sp 0x20)
@@ -203,7 +195,7 @@
     ; move arg in
     (\mv    $s1 $a1)
     (\li    $t0 1)
-    (\sd    $t0 $sp 0x30) ; set first flag
+    (\sd    $t0 $sp 0x28) ; set first flag
     (\j     (rel loop))
   )
   (end
@@ -217,22 +209,23 @@
   )
   (ret
     ; stash result
-    (\sd    $a0 $sp 0x38)
-    (\sd    $a1 $sp 0x40)
+    (\sd    $a0 $sp 0x30)
+    (\sd    $a1 $sp 0x38)
     ; release locals
     (\ld    $a0 $sp 0x10)
     (\auipc $ra (rel  release-object$))
     (\callr $ra (rel+ release-object$))
-    ; release head
+    ; release args
     (\ld    $a0 $sp 0x20)
     (\auipc $ra (rel  release-object$))
     (\callr $ra (rel+ release-object$))
     ; restore saved
     (\ld    $ra $sp 0x00)
     (\ld    $s1 $sp 0x08)
-    (\ld    $a0 $sp 0x38)
-    (\ld    $a1 $sp 0x40)
-    (\addi  $sp $sp 0x48)
+    (\ld    $s2 $sp 0x18)
+    (\ld    $a0 $sp 0x30)
+    (\ld    $a1 $sp 0x38)
+    (\addi  $sp $sp 0x40)
     (\ret)
   )
   (nomem

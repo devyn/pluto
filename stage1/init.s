@@ -50,12 +50,14 @@ start:
         li a1, LINE_BUF_LENGTH
         call get_line
         beqz a0, .Lstart_end
-        mv a1, a0
-        la a0, LINE_BUF
+        mv s4, a0
+        la s3, LINE_BUF
 .Lstart_token_loop:
         # line buffer empty, end loop
-        beqz a1, .Lstart_parse_done
+        beqz s4, .Lstart_parse_done
         # loop through tokens and print them
+        mv a0, s3
+        mv a1, s4
         call get_token
         # make sure token is valid
         beqz a0, .Lstart_token_error
@@ -67,7 +69,7 @@ start:
         la a0, PARSER_ARRAY
         call parse_token
         bgtz a0, .Lstart_eval # value produced
-        beqz a0, .Lstart_token_loop_next # ok but nothing produced
+        beqz a0, .Lstart_token_loop # ok but nothing produced
         # some kind of error
         li t0, PARSER_STATUS_OVERFLOW
         beq a0, t0, .Lstart_token_overflow
@@ -147,11 +149,6 @@ start:
         call putc
         li a0, '\n'
         call putc
-.Lstart_token_loop_next:
-        # restore the remaining line buffer to a0-a1 and loop
-        mv a0, s3
-        mv a1, s4
-        j .Lstart_token_loop
 .Lstart_parse_done:
         j .Lstart_repl
 .Lstart_token_overflow:
