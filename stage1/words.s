@@ -4,21 +4,6 @@
 
 .bss
 
-.set WORDS_HASH_BITS, 8
-.set WORDS_LEN, (1 << WORDS_HASH_BITS)
-
-# global definitions hashtable
-#
-# see symbol.s, this table is organized in the same way, but the list entries are different
-#
-# each list is a list of associated pairs to their values
-#
-# for example:
-#
-# ((add . <0x10000>) (sub . <0x10100>))
-.global WORDS
-WORDS: .skip WORDS_LEN * 8
-
 .section .rodata
 
 # The initial words list is a packed efficient format consisting of variable-length records of:
@@ -278,12 +263,6 @@ INITIAL_WORDS:
         .ascii "unbox-integer$"
         .balign 8
 
-        .quad WORDS
-        .byte 6
-        .byte LISP_OBJECT_TYPE_INTEGER
-        .ascii "words$"
-        .balign 8
-
         .quad shutdown
         .byte 9
         .byte LISP_OBJECT_TYPE_INTEGER
@@ -303,11 +282,6 @@ words_init:
         sd ra, 0x00(sp)
         sd s1, 0x08(sp)
         sd s2, 0x10(sp)
-        # zero the words table
-        la a0, WORDS
-        li a1, WORDS_LEN
-        mv a2, zero
-        call mem_set_d
         # unpack the initial words table
         la s1, INITIAL_WORDS
 1:
@@ -421,7 +395,7 @@ lookup:
         addi sp, sp, 0x30
         ret
 
-# Find the associated value of a symbol key in either the local words list, or global WORDS
+# Find the associated value of a symbol key in either the local words list, or global value
 #
 # arguments:
 # a0 = symbol address
@@ -441,21 +415,15 @@ lookup_var:
         mv a0, a1
         mv a1, s1
         call lookup
-        bnez a0, .Llookup_var_ret_local
-        # if not found, check global WORDS
-        mv a0, s1
-        call get_words_ptr
-        ld a0, (a0) # deref value of WORDS ptr to get head of list
-        call acquire_object # get our own reference
-        mv a1, s1
-        ld ra, 0x00(sp)
-        ld s1, 0x08(sp)
-        addi sp, sp, 0x10
-        j lookup
-.Llookup_var_ret_local:
-        # we found it locally, clean up extra symbol ref
+        bnez a0, .Llookup_var_ret
+        # if not found, return global value of the symbol
+        ld a0, LISP_SYMBOL_GLOBAL_VALUE(s1)
+        call acquire_object
+        mv a1, a0
+.Llookup_var_ret:
+        # clean up the extra symbol ref
         mv t0, a1
-        mv a0, s1
+        mv a0, s1 # symbol
         mv s1, t0 # s1 now = found return a1
         call release_object
         li a0, 1
@@ -463,33 +431,6 @@ lookup_var:
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
         addi sp, sp, 0x10
-        ret
-
-# Find the pointer in the WORDS table for the given symbol address in a0
-.global get_words_ptr
-get_words_ptr:
-        addi sp, sp, -0x08
-        sd ra, 0x00(sp)
-        beqz a0, .Lget_words_ptr_error # nil => error
-        mv t1, a0
-        lwu t2, LISP_OBJECT_TYPE(t1)
-        li t3, LISP_OBJECT_TYPE_SYMBOL
-        bne t2, t3, .Lget_words_ptr_error # not symbol => error
-        lb a0, LISP_SYMBOL_HASH(t1)
-        # mask the hash to number of bits
-        andi a0, a0, (1 << WORDS_HASH_BITS) - 1
-        # times 8 (double word)
-        slli a0, a0, 3
-        j .Lget_words_ptr_ret
-.Lget_words_ptr_error:
-        # on error just return &WORDS[0]
-        mv a0, zero
-.Lget_words_ptr_ret:
-        # add WORDS offset
-        la t1, WORDS
-        add a0, a0, t1
-        ld ra, 0x00(sp)
-        addi sp, sp, 0x08
         ret
 
 # Define a new word
@@ -502,34 +443,29 @@ get_words_ptr:
 # a0 = 0 (ok), -1 (error)
 .global define
 define:
-        addi sp, sp, -0x18
+        # check early for unacceptable arguments
+        beqz a0, .Ldefine_err # can't define nil
+        lwu t0, LISP_OBJECT_TYPE(a0)
+        li t1, LISP_OBJECT_TYPE_SYMBOL
+        bne t0, t1, .Ldefine_err # can't define other than a symbol as key
+        # setup stack so we can call stuff
+        addi sp, sp, -0x10
         sd ra, 0x00(sp)
-        sd s1, 0x08(sp) # symbol / words ptr
-        sd s2, 0x10(sp) # pair
-        mv s1, a0
-        mv s2, zero
-        # create a new pair for (symbol . value)
-        call cons
-        beqz a0, .Ldefine_error # error
-        mv s2, a0
-        # find the ptr into WORDS and then prepend to that list
-        mv a0, s1 # the symbol
-        call get_words_ptr
-        mv s1, a0 # save it to s1
-        # create a new cons for the prepend
-        mv a0, s2 # pair
-        ld a1, (s1) # WORDS[N]
-        call cons
-        beqz a0, .Ldefine_error
-        mv s2, zero # used
-        sd a0, (s1) # WORDS[N] = new
-        mv a0, zero # return ok
-        j .Ldefine_ret
-.Ldefine_error:
-        li a0, -1
-.Ldefine_ret:
+        sd a0, 0x08(sp) # symbol
+        # swap the current global value of the symbol
+        ld t0, LISP_SYMBOL_GLOBAL_VALUE(a0)
+        sd a1, LISP_SYMBOL_GLOBAL_VALUE(a0)
+        # release the old value
+        mv a0, t0
+        call release_object
+        # release the symbol
+        ld a0, 0x08(sp)
+        call release_object
+        # return
+        li a0, 0
         ld ra, 0x00(sp)
-        ld s1, 0x08(sp)
-        ld s2, 0x10(sp)
-        addi sp, sp, 0x18
+        addi sp, sp, 0x10
+        ret
+.Ldefine_err:
+        li a0, -1
         ret

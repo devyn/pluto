@@ -1,7 +1,12 @@
-(define get-words (fn (index)
-  (let1 addr (peek.d (+ words$ (<< index 3)))
-    (seq
-      (call-native acquire-object$ 0 addr)
-      (deref addr))))))
-
-;(map (fn (index) (length (get-words index))) (range 0 255))
+(define global-value-of (fn (symbol)
+  (if (ref-eq? (type-of symbol) (quote symbol))
+    (let
+      (
+        (symbol-addr (ref symbol))
+        (global-value-addr (peek.d (+ symbol-addr 24)))
+      )
+      (seq
+        (call-native acquire-object$ 0 global-value-addr)
+        (call-native release-object$ 0 symbol-addr)
+        (deref global-value-addr)))
+    (error (quote not-a-symbol:) symbol))))
