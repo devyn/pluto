@@ -278,6 +278,12 @@ INITIAL_WORDS:
         .ascii "unbox-integer$"
         .balign 8
 
+        .quad WORDS
+        .byte 6
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "words$"
+        .balign 8
+
         # end
         .quad 0
         .quad 0

@@ -65,3 +65,13 @@
         (eval scope (car args))
         (eval scope (cadr args)))))))
 
+; (range 0 5) => (0 1 2 3 4)
+(define range
+  (proc args scope
+    (let1 start (eval scope (car args))
+      (let1 end (eval scope (cadr args))
+        (if (zero? (car (call-native -$ 1 end start)))
+          ()
+          (cons start (range
+            (car (call-native +$ 1 start 1))
+            end)))))))
