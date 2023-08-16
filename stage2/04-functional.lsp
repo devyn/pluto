@@ -14,11 +14,8 @@
 
 ; functional map list
 (define map (fn (f list)
-  (left-fold
-    (fn (out-list val)
-      (concat out-list (cons (f val) ())))
-    ()
-    list)))
+  (if (nil? list) ()
+    (cons (f (car list)) (map f (cdr list))))))
 
 ; let multiple
 ; e.g. (let ((foo 1) (bar 2)) (+ foo bar))
