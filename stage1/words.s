@@ -4,7 +4,7 @@
 
 .bss
 
-.set WORDS_HASH_BITS, 6
+.set WORDS_HASH_BITS, 8
 .set WORDS_LEN, (1 << WORDS_HASH_BITS)
 
 # global definitions hashtable

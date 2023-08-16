@@ -4,4 +4,4 @@
       (call-native acquire-object$ 0 addr)
       (deref addr))))))
 
-;(map (fn (index) (length (get-words index))) (range 0 63))
+;(map (fn (index) (length (get-words index))) (range 0 255))
