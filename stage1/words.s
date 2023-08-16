@@ -284,6 +284,12 @@ INITIAL_WORDS:
         .ascii "words$"
         .balign 8
 
+        .quad shutdown
+        .byte 9
+        .byte LISP_OBJECT_TYPE_INTEGER
+        .ascii "shutdown$"
+        .balign 8
+
         # end
         .quad 0
         .quad 0
