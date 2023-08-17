@@ -304,10 +304,15 @@ drop_object:
         la ra, .Ldrop_object_end
         jr (t0)
 .Ldrop_object_zero:
-        # print z address and return without deallocating
+        # print z address:ra and return without deallocating
         li a0, 'z'
         call putc
         mv a0, s1
+        li a1, 16
+        call put_hex
+        li a0, ':'
+        call putc
+        ld a0, 0(sp) # return address
         li a1, 16
         call put_hex
         li a0, '\n'
