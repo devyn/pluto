@@ -24,7 +24,7 @@ eval:
         sd a1, 0x10(sp) # a1 = local words list
         # check type of expression
         beqz a0, .Leval_literal # return literal nil
-        lwu t1, LISP_OBJECT_TYPE(a0)
+        lw t1, LISP_OBJECT_TYPE(a0)
         li t2, LISP_OBJECT_TYPE_SYMBOL
         beq t1, t2, .Leval_symbol # eval symbol just looks it up
         li t2, LISP_OBJECT_TYPE_CONS
@@ -108,7 +108,7 @@ acquire_locals:
 call_procedure:
         # check if the value is a procedure
         beqz a0, .Lcall_procedure_not_callable
-        lwu t1, LISP_OBJECT_TYPE(a0)
+        lw t1, LISP_OBJECT_TYPE(a0)
         li t2, LISP_OBJECT_TYPE_PROCEDURE
         bne t1, t2, .Lcall_procedure_not_callable
         # add ref to data and release procedure object

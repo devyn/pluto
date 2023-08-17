@@ -261,7 +261,7 @@ drop_object:
         sd s1, 8(sp) # s1 = saved object address
         sd s2, 16(sp) # s2 = object type
         mv s1, a0
-        lwu s2, LISP_OBJECT_TYPE(s1)
+        lw s2, LISP_OBJECT_TYPE(s1)
         # check type
         li t0, LISP_OBJECT_TYPE_CONS
         beq s2, t0, .Ldrop_object_cons
@@ -271,6 +271,7 @@ drop_object:
         beq s2, t0, .Ldrop_object_procedure
         li t0, LISP_OBJECT_TYPE_SYMBOL
         beq s2, t0, .Ldrop_object_symbol
+        bltz s2, .Ldrop_object_user
         beqz s2, .Ldrop_object_zero # most likely double free
         j .Ldrop_object_end # unknown or no special handling needed
 .Ldrop_object_cons:
@@ -297,6 +298,12 @@ drop_object:
         mv a0, s1
         call acquire_object
         j .Ldrop_object_ret
+.Ldrop_object_user:
+        # call destructor unless zero
+        ld t0, LISP_USER_OBJ_DESTRUCTOR(s1)
+        beqz t0, .Ldrop_object_end
+        la ra, .Ldrop_object_end
+        jr (t0)
 .Ldrop_object_zero:
         # print z address and return without deallocating
         li a0, 'z'
@@ -306,7 +313,7 @@ drop_object:
         call put_hex
         li a0, '\n'
         call putc
-        j 1f
+        j .Ldrop_object_ret
 .Ldrop_object_end:
         mv a0, s1
         li a1, LISP_OBJECT_SIZE

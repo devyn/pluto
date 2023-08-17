@@ -477,7 +477,7 @@ parse_token:
         # (empty list)
         ld t3, PARSER_STATE_E_CURRENT_NODE(s2)
         beqz t3, 1f # cons is not set yet
-        lwu t4, LISP_OBJECT_TYPE(t3)
+        lw t4, LISP_OBJECT_TYPE(t3)
         li t5, LISP_OBJECT_TYPE_CONS
         bne t4, t5, .Lparse_token_error # must assoc to a list
         ld t4, LISP_CONS_TAIL(t3)

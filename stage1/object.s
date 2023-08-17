@@ -24,7 +24,7 @@ uncons:
         sd zero, 0x20(sp)
         beqz a0, .Luncons_ret # nil
         li t1, LISP_OBJECT_TYPE_CONS
-        lwu t2, LISP_OBJECT_TYPE(a0)
+        lw t2, LISP_OBJECT_TYPE(a0)
         bne t2, t1, .Luncons_ret # not cons
         # success - get value
         li t1, 1
@@ -121,7 +121,7 @@ unbox_integer:
         sd zero, 0x10(sp)
         beqz a0, .Lunbox_integer_ret # nil
         li t1, LISP_OBJECT_TYPE_INTEGER
-        lwu t2, LISP_OBJECT_TYPE(a0)
+        lw t2, LISP_OBJECT_TYPE(a0)
         bne t2, t1, .Lunbox_integer_ret # not integer
         # success - get value
         li t1, 1
@@ -161,7 +161,7 @@ unbox_procedure:
         sd a0, 0x20(sp)
         beqz a0, .Lunbox_procedure_ret # nil
         li t1, LISP_OBJECT_TYPE_PROCEDURE
-        lwu t2, LISP_OBJECT_TYPE(a0)
+        lw t2, LISP_OBJECT_TYPE(a0)
         bne t2, t1, .Lunbox_procedure_ret # not procedure
         # success - get value
         li t1, 1
@@ -248,7 +248,7 @@ print_obj:
         mv s1, a0
         beqz s1, .Lprint_obj_cons # since nil = (), handle with cons
         # check object type
-        lwu t0, LISP_OBJECT_TYPE(s1)
+        lw t0, LISP_OBJECT_TYPE(s1)
         li t1, LISP_OBJECT_TYPE_CONS
         beq t0, t1, .Lprint_obj_cons
         li t1, LISP_OBJECT_TYPE_INTEGER
@@ -257,12 +257,29 @@ print_obj:
         beq t0, t1, .Lprint_obj_symbol
         li t1, LISP_OBJECT_TYPE_STRING
         beq t0, t1, .Lprint_obj_string
-        li t1, LISP_OBJECT_TYPE_PROCEDURE
-        beq t0, t1, .Lprint_obj_procedure
-        # print <??> if unrecognized
-        la a0, PRINT_UNRECOGNIZED_MSG
-        ld a1, (PRINT_UNRECOGNIZED_MSG_LENGTH)
-        call put_buf
+        # for anything else, print the raw fields
+        li a0, '<'
+        call putc
+        ld a0, 0x00(s1)
+        li a1, 16
+        call put_hex
+        li a0, ' '
+        call putc
+        ld a0, 0x08(s1)
+        li a1, 16
+        call put_hex
+        li a0, ' '
+        call putc
+        ld a0, 0x10(s1)
+        li a1, 16
+        call put_hex
+        li a0, ' '
+        call putc
+        ld a0, 0x18(s1)
+        li a1, 16
+        call put_hex
+        li a0, '>'
+        call putc
         j .Lprint_obj_ret
 .Lprint_obj_cons:
         li a0, '('
@@ -280,7 +297,7 @@ print_obj:
         li a0, ' '
         call putc
         # check if the type is CONS and loop if so
-        lwu t0, LISP_OBJECT_TYPE(s1)
+        lw t0, LISP_OBJECT_TYPE(s1)
         li t1, LISP_OBJECT_TYPE_CONS
         beq t0, t1, .Lprint_obj_cons_loop
         # this is an assoc so put the dot and space
@@ -336,23 +353,6 @@ print_obj:
         ld s3, 0x08(sp)
         addi sp, sp, 0x10
         j .Lprint_obj_ret
-.Lprint_obj_procedure:
-        # print <address data>
-        li a0, '<'
-        call putc
-        jal t0, .Lprint_obj_zero_x
-        ld a0, LISP_PROCEDURE_PTR(s1)
-        li a1, 16
-        call put_hex
-        li a0, ' '
-        call putc
-        jal t0, .Lprint_obj_zero_x
-        ld a0, LISP_PROCEDURE_DATA(s1)
-        li a1, 16
-        call put_hex
-        li a0, '>'
-        call putc
-        j .Lprint_obj_ret
 .Lprint_obj_zero_x:
         li a0, '0'
         call putc
@@ -365,8 +365,3 @@ print_obj:
         ld a0, 0x10(sp)
         addi sp, sp, 0x18
         ret
-
-.section .rodata
-
-PRINT_UNRECOGNIZED_MSG: .ascii "<??>"
-PRINT_UNRECOGNIZED_MSG_LENGTH: .quad . - PRINT_UNRECOGNIZED_MSG

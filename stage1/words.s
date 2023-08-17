@@ -453,7 +453,7 @@ lookup_var:
 define:
         # check early for unacceptable arguments
         beqz a0, .Ldefine_err # can't define nil
-        lwu t0, LISP_OBJECT_TYPE(a0)
+        lw t0, LISP_OBJECT_TYPE(a0)
         li t1, LISP_OBJECT_TYPE_SYMBOL
         bne t0, t1, .Ldefine_err # can't define other than a symbol as key
         # setup stack so we can call stuff
