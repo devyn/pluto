@@ -247,8 +247,7 @@ release_object:
         lw t0, LISP_OBJECT_REFCOUNT(a0)
         addi t0, t0, -1
         sw t0, LISP_OBJECT_REFCOUNT(a0)
-        bgtz t0, 1f
-        j drop_object
+        blez t0, drop_object
 1:
         mv a0, zero
         ret
