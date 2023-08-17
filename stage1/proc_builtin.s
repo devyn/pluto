@@ -506,104 +506,213 @@ proc_cons:
 # Create procedure
 # e.g. (proc args locals (car args)) ; equivalent to quote
 
+# Proc data structure
+.set PROC_DATA_TYPE,       -2
+.set PROC_DATA_SIZE,       0x20 # same as object so we can be nice to the allocator
+.set PROC_DATA_ALIGN,      8
+.set PROC_DATA_LOCALS,     0x00
+.set PROC_DATA_ARGS_SYM,   0x08
+.set PROC_DATA_LOCALS_SYM, 0x10
+.set PROC_DATA_EXPRESSION, 0x18
+
 .global proc_proc
 proc_proc:
-        addi sp, sp, -0x08
+        addi sp, sp, -0x20
         sd ra, 0x00(sp)
-        # prepend the local words to the args (capture environment)
-        mv t0, a0
-        mv a0, a1
-        mv a1, t0
-        call cons
-        beqz a0, .Lproc_proc_error # alloc error
-        # a0 = (<locals/a1> <args-sym> <locals-sym> <expression>)
-        mv a1, a0 # data
-        la a0, proc_stub
-        call box_procedure
-        beqz a0, .Lproc_proc_error
-        # a0 = procedure
+        sd s1, 0x08(sp)
+        sd a0, 0x10(sp)
+        sd a1, 0x18(sp)
+        mv s1, zero # pointer to proc data, PROC_DATA_SIZE
+        # create custom data structure, for proc_stub to read
+        # use a four-dw structure
+        li a0, PROC_DATA_SIZE
+        li a1, PROC_DATA_ALIGN
+        call allocate
+        beqz a0, .Lproc_proc_nomem # alloc error
+        mv s1, a0
+        # store locals
+        ld t0, 0x18(sp)
+        sd zero, 0x18(sp) # used
+        sd t0, PROC_DATA_LOCALS(s1)
+        # initialize other fields just in case of error
+        sd zero, PROC_DATA_ARGS_SYM(s1)
+        sd zero, PROC_DATA_LOCALS_SYM(s1)
+        sd zero, PROC_DATA_EXPRESSION(s1)
+        # get args sym
+        ld a0, 0x10(sp)
+        sd zero, 0x10(sp)
+        call uncons
+        beqz a0, .Lproc_proc_exc # not enough args
+        sd a1, PROC_DATA_ARGS_SYM(s1)
+        mv a0, a2
+        # get locals sym
+        call uncons
+        beqz a0, .Lproc_proc_exc # not enough args
+        sd a1, PROC_DATA_LOCALS_SYM(s1)
+        mv a0, a2
+        # get expression
+        call car
+        sd a0, PROC_DATA_EXPRESSION(s1)
+        # make custom data
+        mv a3, zero
+        mv a2, s1
+        la a1, proc_proc_data_destroy
+        li a0, PROC_DATA_TYPE
+        call make_obj
+        beqz a0, .Lproc_proc_nomem # alloc error
+        mv s1, zero # used
+        sd a0, 0x10(sp) # in case there's an error so it gets freed
+        # make procedure
+        mv a3, zero
+        mv a2, a0
+        la a1, proc_stub
+        li a0, LISP_OBJECT_TYPE_PROCEDURE
+        call make_obj
+        beqz a0, .Lproc_proc_nomem # alloc error
+        # return
         mv a1, a0
-        mv a0, zero
-        j .Lproc_proc_ret
-.Lproc_proc_error:
+        mv a0, zero # ok
+        # restore and return
+        ld ra, 0x00(sp)
+        ld s1, 0x08(sp)
+        addi sp, sp, 0x20
+        ret
+.Lproc_proc_nomem:
         li a0, EVAL_ERROR_NO_FREE_MEM
         mv a1, zero
-.Lproc_proc_ret:
+        j .Lproc_proc_err_ret
+.Lproc_proc_exc:
+        li a0, EVAL_ERROR_EXCEPTION
+        mv a1, zero
+.Lproc_proc_err_ret:
+        # cleanup is required
+        # stash a0, a1
+        addi sp, sp, 0x10
+        sd a0, 0x00(sp)
+        sd a1, 0x08(sp)
+        # release anything unused
+        beqz s1, 1f
+        mv a0, s1
+        call proc_proc_data_drop
+1:
+        ld a0, 0x20(sp)
+        call release_object
+        ld a0, 0x28(sp)
+        call release_object
+        # unstash
+        ld a0, 0x00(sp)
+        ld a1, 0x08(sp)
+        ld ra, 0x10(sp)
+        ld s1, 0x18(sp)
+        addi sp, sp, 0x30
+        ret
+
+# Destructor for custom proc data object
+.global proc_proc_data_destroy
+proc_proc_data_destroy:
+        beqz a0, 1f
+        lw t0, (a0)
+        li t1, PROC_DATA_TYPE
+        bne t0, t1, 1f
+        # get pointer to the actual custom data
+        ld a0, LISP_USER_OBJ_DATA1(a0)
+        j proc_proc_data_drop
+1:
+        ret
+
+# Destructor for custom proc data
+.global proc_proc_data_drop
+proc_proc_data_drop:
+        addi sp, sp, -0x10
+        sd ra, 0x00(sp)
+        sd s1, 0x08(sp)
+        mv s1, a0
+        # release each field
+        ld a0, PROC_DATA_LOCALS(s1)
+        call release_object
+        ld a0, PROC_DATA_ARGS_SYM(s1)
+        call release_object
+        ld a0, PROC_DATA_LOCALS_SYM(s1)
+        call release_object
+        ld a0, PROC_DATA_EXPRESSION(s1)
+        call release_object
+        # deallocate data itself
+        mv a0, s1
+        li a1, PROC_DATA_SIZE
+        call deallocate
+        # return
         ld ra, 0x00(sp)
-        addi sp, sp, 0x08
+        ld s1, 0x08(sp)
+        addi sp, sp, 0x10
         ret
 
 # Evaluates data from procedure created by proc_proc
 .global proc_stub
 proc_stub:
-        addi sp, sp, -0x28
+        addi sp, sp, -0x30
         sd ra, 0x00(sp)
         sd s1, 0x08(sp)
         sd a0, 0x10(sp) # args
         sd a1, 0x18(sp) # locals
         sd a2, 0x20(sp) # data
-        mv s1, zero
+        sd s2, 0x28(sp)
         # goal: set up eval call a0/a1 then jump
-        # first goal: create ((locals . <a1>) (args . <a0>) . <data.0>)
-        mv a0, a2
-        call uncons
-        mv s1, a1
-        # s1 = <data.0>
-        mv a0, a2
-        call uncons
-        # a1 = args symbol
-        mv a0, a1
-        sd a2, 0x20(sp) # save tail
-        beqz a0, 2f # skip if nil
+        # first goal: create ((locals . <a1>) (args . <a0>) . <data.locals>)
+        ld s2, LISP_USER_OBJ_DATA1(a2)
+        ld a0, PROC_DATA_LOCALS(s2)
+        call acquire_object
+        mv s1, a0
+        # Get args symbol
+        ld a0, PROC_DATA_ARGS_SYM(s2)
+        beqz a0, 1f # skip if nil
+        call acquire_object
         ld a1, 0x10(sp)
-        sd zero, 0x10(sp)
+        sd zero, 0x10(sp) # used
         call cons
         beqz a0, .Lproc_stub_error
-        # now cons the args pair to the s1 list
+        # a0 = args pair, cons with s1
         mv a1, s1
+        mv s1, zero
         call cons
         beqz a0, .Lproc_stub_error
         mv s1, a0
-        j 1f
-2:
-        # drop args, not used
+1:
+        # Get locals symbol
+        ld a0, PROC_DATA_LOCALS_SYM(s2)
+        beqz a0, 1f # skip if nil
+        call acquire_object
+        ld a1, 0x18(sp)
+        sd zero, 0x18(sp) # used
+        call cons
+        beqz a0, .Lproc_stub_error
+        # a0 = locals pair, cons with s1
+        mv a1, s1
+        mv s1, zero
+        call cons
+        beqz a0, .Lproc_stub_error
+        mv s1, a0
+1:
+        # Swap expression for data on stack
+        ld a0, PROC_DATA_EXPRESSION(s2)
+        call acquire_object
+        ld t0, 0x20(sp)
+        sd a0, 0x20(sp)
+        # Release data
+        mv a0, t0
+        call release_object
+        # Release args/locals remaining if not used
         ld a0, 0x10(sp)
         call release_object
-        sd zero, 0x10(sp)
-1:
-        # s1 = ((args . <a0>) . <data.0>)
-        ld a0, 0x20(sp)
-        call uncons
-        # a1 = locals symbol
-        mv a0, a1
-        sd a2, 0x20(sp) # save tail
-        beqz a0, 2f # skip if nil
-        ld a1, 0x18(sp)
-        sd zero, 0x18(sp)
-        call cons
-        beqz a0, .Lproc_stub_error
-        # now cons the locals pair to the s1 list
-        mv a1, s1
-        call cons
-        beqz a0, .Lproc_stub_error
-        mv s1, a0
-        j 1f
-2:
-        # drop locals, not used
         ld a0, 0x18(sp)
         call release_object
-        sd zero, 0x18(sp)
-1:
-        # s1 is setup, should be a1 for the eval
-        # get a0 (expression)
+        # Set up eval expression x locals
         ld a0, 0x20(sp)
-        call car
-        # expression in a0, now a1 = s1
         mv a1, s1
-        # done - clean up stack and jump to eval
+        # Restore then tail-call eval
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
-        addi sp, sp, 0x28
+        ld s2, 0x28(sp)
+        addi sp, sp, 0x30
         j eval
 .Lproc_stub_error:
         # release args/locals/data
@@ -617,7 +726,8 @@ proc_stub:
         call release_object
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
-        addi sp, sp, 0x28
+        ld s2, 0x28(sp)
+        addi sp, sp, 0x30
         li a0, EVAL_ERROR_NO_FREE_MEM
         mv a1, zero
         ret
