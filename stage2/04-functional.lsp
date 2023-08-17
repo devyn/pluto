@@ -2,10 +2,16 @@
 ; allows you to much more nicely define a function - just provide arg list
 ; and destructuring will happen automatically
 (define fn (proc def-args def-scope
-  (proc args scope
-    (eval
-      (concat (assoc (car def-args) (eval-list scope args)) def-scope)
-      (cadr def-args)))))
+  (eval ()
+    (concat (quote (proc args scope))
+      (cons
+        (list eval
+          (list concat
+            (list assoc
+              (list quote (car def-args))
+              (quote (eval-list scope args)))
+            (list quote def-scope))
+          (list quote (cadr def-args))) ())))))
 
 ; functional left fold
 (define left-fold (fn (f val list)
