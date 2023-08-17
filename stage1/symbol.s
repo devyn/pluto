@@ -108,7 +108,7 @@ symbol_intern:
         mv a2, s4
         call mem_copy
         # create a new object for the symbol
-        mv a3, zero # LISP_SYMBOL_GLOBAL_VALUE
+        li a3, -1 # LISP_SYMBOL_GLOBAL_VALUE = undefined
         mv a2, s2 # LISP_SYMBOL_LEN
         mv a1, s4 # LISP_SYMBOL_BUF
         li a0, LISP_OBJECT_TYPE_SYMBOL

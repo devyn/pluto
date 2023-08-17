@@ -415,12 +415,14 @@ lookup_var:
         mv a0, a1
         mv a1, s1
         call lookup
-        bnez a0, .Llookup_var_ret
+        bnez a0, .Llookup_var_end
         # if not found, return global value of the symbol
         ld a0, LISP_SYMBOL_GLOBAL_VALUE(s1)
+        li t0, -1
+        beq a0, t0, .Llookup_var_undef # undefined
         call acquire_object
         mv a1, a0
-.Llookup_var_ret:
+.Llookup_var_end:
         # clean up the extra symbol ref
         mv t0, a1
         mv a0, s1 # symbol
@@ -428,10 +430,16 @@ lookup_var:
         call release_object
         li a0, 1
         mv a1, s1
+.Llookup_var_ret:
         ld ra, 0x00(sp)
         ld s1, 0x08(sp)
         addi sp, sp, 0x10
         ret
+.Llookup_var_undef:
+        mv a0, s1
+        call release_object
+        li a0, 0
+        j .Llookup_var_ret
 
 # Define a new word
 #
@@ -455,9 +463,12 @@ define:
         # swap the current global value of the symbol
         ld t0, LISP_SYMBOL_GLOBAL_VALUE(a0)
         sd a1, LISP_SYMBOL_GLOBAL_VALUE(a0)
-        # release the old value
+        # release the old value unless it was undefined
+        li t1, -1
+        beq t0, t1, 1f
         mv a0, t0
         call release_object
+1:
         # release the symbol
         ld a0, 0x08(sp)
         call release_object
