@@ -42,3 +42,39 @@
       0x100000005 ; type = procedure, refcount = 1
       address
       (ref data)))))
+
+; get address and data from procedure
+(define unbox-procedure
+  (fn (procedure)
+    (if (symbol-eq? (type-of procedure) (quote procedure))
+      (let
+        (
+          (proc-address (ref procedure))
+          (address (peek.d (+ proc-address 8)))
+          (data (deref (car (call-native acquire-object$ 1 (peek.d (+ proc-address 16))))))
+        )
+        (seq1 (deref proc-address) (list address data)))
+      ())))
+
+; get internal fields from proc
+(define proc-stub (car (unbox-procedure (proc () ())))) ; address of any proc procedure
+(define proc-fields
+  (fn (procedure)
+    (let1 addr-data (unbox-procedure procedure)
+      (if (number-eq? proc-stub (car addr-data)) ; ensure this is a proc procedure
+        (let
+          (
+            (proc-data-addr (ref (cadr addr-data)))
+            (proc-fields-addr (peek.d (+ proc-data-addr 16)))
+          )
+          (seq
+            (call-native release-object$ 0 proc-data-addr)
+            (map
+              ; get each field
+              (fn (index)
+                (let1 field-addr (peek.d (+ proc-fields-addr (<< index 3)))
+                  (seq
+                    (call-native acquire-object$ 0 field-addr)
+                    (deref field-addr))))
+              (range 0 4))))
+        ()))))
